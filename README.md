@@ -1,6 +1,6 @@
 # Focus Tracker SaaS
 
-[![CI](TODO-ADD-GITHUB-ACTIONS-BADGE-URL)](TODO-ADD-GITHUB-ACTIONS-WORKFLOW-URL)
+[![CI](https://github.com/Geochelone666/focus-tracker-saas/actions/workflows/ci.yml/badge.svg)](https://github.com/Geochelone666/focus-tracker-saas/actions/workflows/ci.yml)
 
 A full-stack **Next.js (App Router)** starter with **Tailwind CSS** and **Supabase authentication**.
 A clean, production-ready starter for a full-stack **Next.js (App Router)** application with **Tailwind CSS** and **Supabase client scaffolding**.
