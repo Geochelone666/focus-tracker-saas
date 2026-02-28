@@ -1,5 +1,7 @@
 # Focus Tracker SaaS
 
+[![CI](TODO-ADD-GITHUB-ACTIONS-BADGE-URL)](TODO-ADD-GITHUB-ACTIONS-WORKFLOW-URL)
+
 A full-stack **Next.js (App Router)** starter with **Tailwind CSS** and **Supabase authentication**.
 A clean, production-ready starter for a full-stack **Next.js (App Router)** application with **Tailwind CSS** and **Supabase client scaffolding**.
 
@@ -101,3 +103,14 @@ Open [http://localhost:3000](http://localhost:3000).
 - Authentication and database features are intentionally not implemented yet.
 - The Supabase client uses environment variables only (no hardcoded keys).
 - The homepage includes a non-functional **Login** button for future wiring.
+
+## CI
+
+GitHub Actions CI runs the following checks on every pull request and on pushes to `main`:
+
+- Install dependencies (`npm ci`)
+- Lint (`npm run lint`)
+- Type check (`npm run typecheck`)
+- Production build (`npm run build`)
+
+To view results, open the **Actions** tab in GitHub and inspect the latest **CI** workflow run for your branch/PR.
