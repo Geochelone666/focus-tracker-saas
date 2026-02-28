@@ -108,9 +108,12 @@ Open [http://localhost:3000](http://localhost:3000).
 
 GitHub Actions CI runs the following checks on every pull request and on pushes to `main`:
 
-- Install dependencies (`npm ci`)
+- Install dependencies (`npm install --no-audit --no-fund`)
 - Lint (`npm run lint`)
 - Type check (`npm run typecheck`)
 - Production build (`npm run build`)
+
+
+> Temporary note: CI currently uses `npm install --no-audit --no-fund` due to a `package.json`/`package-lock.json` mismatch in this branch. After regenerating and committing an in-sync lockfile, switch CI back to `npm ci`.
 
 To view results, open the **Actions** tab in GitHub and inspect the latest **CI** workflow run for your branch/PR.
