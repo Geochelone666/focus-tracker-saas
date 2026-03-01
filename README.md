@@ -116,4 +116,6 @@ GitHub Actions CI runs the following checks on every pull request and on pushes 
 
 > Temporary note: CI currently uses `npm install --no-audit --no-fund` due to a `package.json`/`package-lock.json` mismatch in this branch. After regenerating and committing an in-sync lockfile, switch CI back to `npm ci`.
 
+> CI sets placeholder Supabase environment values (`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`) so build validation can run in GitHub Actions. For real deployments, configure actual values in Vercel project environment settings.
+
 To view results, open the **Actions** tab in GitHub and inspect the latest **CI** workflow run for your branch/PR.
