@@ -1,0 +1,23 @@
+# Supabase migrations
+
+本目录是数据库 schema 和 RLS policy 变更的版本记录。
+
+## 变更纪律
+
+- 以后每次 schema 或 policy 变更，都新增一个递增编号的 migration 文件，例如 `005_xxx.sql`；不要修改已执行的 migration。
+- 在 Supabase SQL Editor 中按编号从小到大执行 migration。首次初始化依次执行 `001` 至 `004`，后续只执行尚未应用的新文件，并记录执行结果。
+- 所有线上表结构变更必须先写入 migration、经过代码审查，再执行对应文件；绝不通过 Dashboard 手改线上表或执行未记录在 migration 中的临时 DDL。
+- `db/` 目录是历史文件，保留不动；后续变更统一记录在本目录。
+
+## 初始迁移
+
+| 文件 | 内容 |
+| --- | --- |
+| `001_create_focus_sessions.sql` | pgcrypto extension、focus_sessions 表及索引 |
+| `002_create_skills.sql` | skills 表 |
+| `003_focus_sessions_rls.sql` | focus_sessions 启用 RLS 和 select/insert/update/delete own policies |
+| `004_skills_rls.sql` | skills 启用 RLS 和 select/insert/update/delete own policies |
+
+初始 DDL 和 policy 定义来自 `db/schema.sql` 与 `db/rls.sql`，列定义和访问条件保持一致。
+
+`001` 和 `002` 使用 `IF NOT EXISTS`，`003` 和 `004` 在创建每条 policy 前先执行 `DROP POLICY IF EXISTS`，因此这四个文件可以按顺序重跑。`IF NOT EXISTS` 不会修正已有表的结构差异；结构调整仍须新增 migration。后续 migration 的可重跑性需单独评估。
