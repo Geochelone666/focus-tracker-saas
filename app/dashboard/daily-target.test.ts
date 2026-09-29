@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ createClient: vi.fn(), revalidatePath: vi.fn(), upsert: vi.fn() }));
 vi.mock("@/supabase/server", () => ({ createClient: mocks.createClient }));
 vi.mock("@/lib/validation", () => import("../../lib/validation"));
+vi.mock("@/lib/active-session", () => import("../../lib/active-session"));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw new Error(`Redirect: ${url}`); } }));
 import { updateDailyTarget } from "./actions";

@@ -6,6 +6,7 @@ import {
   formatDuration,
   validateDurationMinutes,
   validateId,
+  validateOptionalSkillId,
   validateSessionNote,
   validateSkillName,
 } from './validation';
@@ -107,5 +108,20 @@ describe('validateDailyTargetMinutes', () => {
   });
   it.each(['0', '1500', 'abc', '12.5', '-1', '1e2', '+90', '12 0'])('rejects %j', (input) => {
     expect(() => validateDailyTargetMinutes(input)).toThrow('Daily target must be a whole number between 1 and 1440 minutes');
+  });
+});
+
+describe('validateOptionalSkillId', () => {
+  it.each(['', ' \t\n ', null, undefined])('returns null for an empty selection %j', (value) => {
+    expect(validateOptionalSkillId(value)).toBeNull();
+  });
+
+  it.each(['not-a-uuid', 123, {}, new Blob(['skill'])])('rejects invalid input %j', (value) => {
+    expect(() => validateOptionalSkillId(value)).toThrow();
+  });
+
+  it('returns a trimmed valid UUID', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(validateOptionalSkillId(`  ${id}  `)).toBe(id);
   });
 });

@@ -118,3 +118,11 @@ export function validateDailyTargetMinutes(value: string): number | null {
   }
   return minutes;
 }
+
+/** Empty selections leave a session independent of any skill. */
+export function validateOptionalSkillId(value: unknown): string | null {
+  if (value == null || (typeof value === "string" && value.trim() === "")) {
+    return null;
+  }
+  return validateId(value);
+}
