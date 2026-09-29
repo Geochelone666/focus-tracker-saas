@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
 import { validateSessionNote } from "@/lib/validation";
+import { classifyActiveSession, pickLatestActiveSession } from "@/lib/active-session";
 
 async function getAuthenticatedUser(context: string, message: string) {
   let auth;
@@ -41,11 +42,91 @@ export async function startSession() {
     if (error) throw error;
   } catch (error) {
     console.error("[startSession] failed to start session", error);
+    const alreadyRunning = typeof error === "object" && error !== null && "code" in error && error.code === "23505";
+    redirect("/dashboard?error=" + encodeURIComponent(alreadyRunning ? "A session is already running." : message));
+  }
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}
+
+async function resolveStaleSession(action: "resume" | "discard") {
+  const message = `Couldn't ${action} the session. Please try again.`;
+  const { supabase, user } = await getAuthenticatedUser(`${action}StaleSession`, message);
+
+  try {
+    const { data: session, error: readError } = await supabase
+      .from("focus_sessions")
+      .select("id, started_at")
+      .eq("user_id", user.id)
+      .is("ended_at", null)
+      .order("started_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (readError) throw readError;
+
+    const now = new Date();
+    if (session && classifyActiveSession(session.started_at, now) === "stale") {
+      const table = supabase.from("focus_sessions");
+      const mutation = action === "resume"
+        ? table.update({ started_at: now.toISOString() })
+        : table.delete();
+      const { error } = await mutation
+        .eq("id", session.id)
+        .eq("user_id", user.id)
+        .eq("started_at", session.started_at)
+        .is("ended_at", null);
+      if (error) throw error;
+    }
+  } catch (error) {
+    console.error(`[${action}StaleSession] failed to resolve session`, error);
     redirect("/dashboard?error=" + encodeURIComponent(message));
   }
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+export async function resumeStaleSession() {
+  await resolveStaleSession("resume");
+}
+
+export async function discardStaleSession() {
+  await resolveStaleSession("discard");
+}
+
+export async function cleanupDuplicateActiveSessions() {
+  const message = "Couldn't recover the running session. Please try again.";
+  const { supabase, user } = await getAuthenticatedUser("cleanupDuplicateActiveSessions", message);
+
+  try {
+    const { data: sessions, error: readError } = await supabase
+      .from("focus_sessions")
+      .select("id, started_at")
+      .eq("user_id", user.id)
+      .is("ended_at", null)
+      .order("started_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (readError) throw readError;
+
+    const latest = pickLatestActiveSession(sessions ?? []);
+    for (const session of sessions ?? []) {
+      if (session.id === latest?.id) continue;
+      const { error } = await supabase
+        .from("focus_sessions")
+        .update({ ended_at: session.started_at, duration_sec: 0 })
+        .eq("id", session.id)
+        .eq("user_id", user.id)
+        .eq("started_at", session.started_at)
+        .is("ended_at", null);
+      if (error) throw error;
+    }
+  } catch (error) {
+    console.error("[cleanupDuplicateActiveSessions] failed to clean up sessions", error);
+    redirect("/dashboard?error=" + encodeURIComponent(message));
+  }
+  // Called during server rendering: do not revalidate or redirect on success.
 }
 
 export async function stopSession(formData: FormData) {
