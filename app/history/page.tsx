@@ -52,6 +52,13 @@ export default async function HistoryPage({
       <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Session History</h1>
       <p className="mb-6 text-slate-600">Your focus sessions. Times are shown in America/Toronto.</p>
 
+      <a
+        href="/history/export"
+        className="mb-6 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+      >
+        Export CSV
+      </a>
+
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
         {error ? (
           <p role="alert" className="text-slate-600">
