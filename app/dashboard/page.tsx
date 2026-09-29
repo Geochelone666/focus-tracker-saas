@@ -11,8 +11,49 @@ type SessionRow = {
 };
 
 type SessionDurationRow = {
+  started_at: string;
   duration_sec: number | null;
 };
+
+const ANALYTICS_TIME_ZONE = "America/Toronto";
+
+const analyticsDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: ANALYTICS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+const timeZoneOffsetFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: ANALYTICS_TIME_ZONE,
+  timeZoneName: "longOffset"
+});
+
+function getDateKey(date: Date) {
+  const parts = analyticsDateFormatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+function getTorontoMidnight(date: Date) {
+  const utcMidnight = date.getTime();
+  const offsetPart = timeZoneOffsetFormatter
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
+  const match = offsetPart?.match(/GMT([+-])(\d{2}):(\d{2})/);
+
+  if (!match) {
+    throw new Error("Could not determine the America/Toronto UTC offset.");
+  }
+
+  const direction = match[1] === "+" ? 1 : -1;
+  const offsetMinutes = direction * (Number(match[2]) * 60 + Number(match[3]));
+
+  return new Date(utcMidnight - offsetMinutes * 60 * 1000);
+}
 
 function formatDuration(totalSeconds: number | null) {
   if (!totalSeconds || totalSeconds <= 0) {
@@ -48,19 +89,52 @@ export default async function DashboardPage() {
 
   const typedSessions: SessionRow[] = (sessions ?? []) as SessionRow[];
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const todayKey = getDateKey(new Date());
+  const [year, month, day] = todayKey.split("-").map(Number);
+  const today = new Date(Date.UTC(year, month - 1, day));
+  const analyticsDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setUTCDate(today.getUTCDate() - (6 - index));
+
+    return {
+      date,
+      key: date.toISOString().slice(0, 10),
+      label: date.toLocaleDateString("en-CA", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC"
+      })
+    };
+  });
+  const tomorrow = new Date(today);
+  tomorrow.setUTCDate(today.getUTCDate() + 1);
+  const analyticsStart = getTorontoMidnight(analyticsDays[0].date).toISOString();
+  const analyticsEnd = getTorontoMidnight(tomorrow).toISOString();
 
   const { data: weeklySessions } = await supabase
     .from("focus_sessions")
-    .select("duration_sec")
+    .select("started_at, duration_sec")
     .eq("user_id", user.id)
-    .gte("started_at", sevenDaysAgo);
+    .gte("started_at", analyticsStart)
+    .lt("started_at", analyticsEnd);
 
   const typedWeeklySessions: SessionDurationRow[] = (weeklySessions ?? []) as SessionDurationRow[];
 
   const weeklyTotalSeconds = typedWeeklySessions.reduce((sum: number, row: SessionDurationRow) => {
     return sum + (row.duration_sec ?? 0);
   }, 0);
+
+  const secondsByDay = new Map(analyticsDays.map((day) => [day.key, 0]));
+  typedWeeklySessions.forEach((session) => {
+    const dateKey = getDateKey(new Date(session.started_at));
+    secondsByDay.set(dateKey, (secondsByDay.get(dateKey) ?? 0) + (session.duration_sec ?? 0));
+  });
+  const dailyFocus = analyticsDays.map((day) => ({
+    ...day,
+    minutes: Math.floor((secondsByDay.get(day.key) ?? 0) / 60)
+  }));
+  const maximumDailyMinutes = Math.max(...dailyFocus.map((day) => day.minutes));
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
@@ -90,7 +164,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="mb-4 text-lg font-semibold text-slate-900">Recent Sessions</h2>
 
         {typedSessions.length === 0 ? (
@@ -121,6 +195,35 @@ export default async function DashboardPage() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-lg font-semibold text-slate-900">Last 7 days</h2>
+        <p className="mt-1 text-sm text-slate-600">Focused minutes per day in America/Toronto.</p>
+        <div className="mt-5 space-y-4">
+          {dailyFocus.map((day) => {
+            const barWidth = maximumDailyMinutes === 0 ? 0 : (day.minutes / maximumDailyMinutes) * 100;
+
+            return (
+              <div key={day.key}>
+                <div className="mb-1 flex items-center justify-between gap-4 text-sm">
+                  <span className="font-medium text-slate-700">{day.label}</span>
+                  <span className="tabular-nums text-slate-600">
+                    {day.minutes} {day.minutes === 1 ? "minute" : "minutes"}
+                  </span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-slate-900"
+                    style={{ width: `${barWidth}%` }}
+                    role="img"
+                    aria-label={`${day.label}: ${day.minutes} focused minutes`}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
     </main>
   );
