@@ -8,7 +8,9 @@ import {
 } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
-import { startSession, stopSession } from "@/app/dashboard/actions";
+import { cleanupDuplicateActiveSessions, discardStaleSession, resumeStaleSession, startSession, stopSession } from "@/app/dashboard/actions";
+import { classifyActiveSession, pickLatestActiveSession } from "@/lib/active-session";
+import { SessionTimer } from "@/components/session-timer";
 
 type SessionRow = {
   id: string;
@@ -32,6 +34,26 @@ export default async function DashboardPage({
   if (!user) {
     redirect("/login");
   }
+
+  const { data: activeSessions, error: activeSessionError } = await supabase
+    .from("focus_sessions")
+    .select("id, started_at")
+    .eq("user_id", user.id)
+    .is("ended_at", null)
+    .order("started_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  // Avoid a redirect loop if recovery failed on the preceding request.
+  if ((activeSessions?.length ?? 0) > 1 && error !== "Couldn't recover the running session. Please try again.") {
+    await cleanupDuplicateActiveSessions();
+  }
+  const latest = pickLatestActiveSession(activeSessions ?? []);
+  const now = new Date();
+  const activeState = classifyActiveSession(latest?.started_at, now);
+  const hoursAgo = latest ? Math.floor((now.getTime() - new Date(latest.started_at).getTime()) / 3600000) : 0;
+  const relative = hoursAgo >= 24
+    ? `${Math.floor(hoursAgo / 24)} ${hoursAgo < 48 ? "day" : "days"}`
+    : `${hoursAgo} hours`;
 
   const { data: sessions } = await supabase
     .from("focus_sessions")
@@ -80,33 +102,52 @@ export default async function DashboardPage({
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-lg font-semibold text-slate-900">Focus Summary (Last 7 Days)</h2>
         <p className="mt-2 text-slate-700">Total focused time: {formatDuration(weeklyTotalSeconds)}</p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <form action={startSession}>
-            <button
-              type="submit"
-              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-            >
-              Start Session
-            </button>
-          </form>
-          <form action={stopSession} className="flex flex-wrap items-center gap-3">
-            <label htmlFor="session-note" className="sr-only">Session note (optional)</label>
-            <input
-              id="session-note"
-              name="note"
-              type="text"
-              maxLength={200}
-              placeholder="What did you work on? (optional)"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm sm:w-80"
-            />
-            <button
-              type="submit"
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
-            >
-              Stop Session
-            </button>
-          </form>
-        </div>
+        {activeSessionError ? (
+          <p role="alert" className="mt-4 text-red-800">Couldn&apos;t load the running session. Please refresh to try again.</p>
+        ) : activeState === "stale" ? (
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-slate-900">
+            <p>Previous session detected. Started {relative} ago</p>
+            <div className="mt-3 flex gap-3">
+              <form action={resumeStaleSession}>
+                <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">Resume</button>
+              </form>
+              <form action={discardStaleSession}>
+                <button type="submit" className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100">Discard</button>
+              </form>
+            </div>
+          </div>
+        ) : (
+          <>
+            {activeState === "active" && latest && <SessionTimer key={latest.started_at} startedAt={latest.started_at} />}
+            <div className="mt-4 flex flex-wrap gap-3">
+              {activeState === "none" && <form action={startSession}>
+                <button
+                  type="submit"
+                  className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                >
+                  Start Session
+                </button>
+              </form>}
+              <form action={stopSession} className="flex flex-wrap items-center gap-3">
+                <label htmlFor="session-note" className="sr-only">Session note (optional)</label>
+                <input
+                  id="session-note"
+                  name="note"
+                  type="text"
+                  maxLength={200}
+                  placeholder="What did you work on? (optional)"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm sm:w-80"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
+                >
+                  Stop Session
+                </button>
+              </form>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
