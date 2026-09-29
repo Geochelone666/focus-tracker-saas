@@ -72,6 +72,73 @@ describe("stopSession notes", () => {
   });
 });
 
+describe('session skill linking', () => {
+  const skillId = '550e8400-e29b-41d4-a716-446655440000';
+  const skills = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn() };
+  const sessions = {
+    select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn(), insert: vi.fn(), update: vi.fn().mockReturnThis()
+  };
+  const from = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    skills.maybeSingle.mockResolvedValue({ data: { id: skillId }, error: null });
+    sessions.maybeSingle.mockResolvedValue({ data: { id: 'session-1', started_at: new Date(Date.now() - 60000).toISOString() }, error: null });
+    sessions.insert.mockResolvedValue({ error: null });
+    from.mockImplementation((table: string) => table === 'skills' ? skills : sessions);
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) }, from
+    });
+  });
+
+  it.each([startSession, stopSession])('checks ownership before linking a skill', async (action) => {
+    const form = new FormData();
+    form.set('skill_id', skillId);
+    form.set('note', '  deep work  ');
+    await expect(action(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
+    expect(skills.eq).toHaveBeenCalledWith('id', skillId);
+    expect(skills.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(action === startSession ? sessions.insert : sessions.update).toHaveBeenCalledWith(expect.objectContaining({ skill_id: skillId }));
+    if (action === stopSession) expect(sessions.update).toHaveBeenCalledWith(expect.objectContaining({ note: 'deep work' }));
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/skills');
+  });
+
+  it.each([startSession, stopSession])('rejects a missing or unowned skill before writing', async (action) => {
+    skills.maybeSingle.mockResolvedValue({ data: null, error: null });
+    const form = new FormData();
+    form.set('skill_id', skillId);
+    await expect(action(form)).rejects.toThrow('Redirect: /dashboard?error=' + encodeURIComponent('That skill could not be found'));
+    expect(sessions.insert).not.toHaveBeenCalled();
+    expect(sessions.update).not.toHaveBeenCalled();
+  });
+
+  it.each([startSession, stopSession])('rejects a malformed skill before querying or writing', async (action) => {
+    const form = new FormData();
+    form.set('skill_id', 'bad-id');
+    await expect(action(form)).rejects.toThrow('Redirect: /dashboard?error=' + encodeURIComponent('That skill could not be found'));
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it.each(['', '   ', null])('starts without a skill for %j', async (value) => {
+    const form = new FormData();
+    if (value !== null) form.set('skill_id', value);
+    await expect(startSession(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
+    expect(sessions.insert).toHaveBeenCalledWith(expect.objectContaining({ skill_id: null }));
+    expect(from).not.toHaveBeenCalledWith('skills');
+  });
+
+  it.each(['', '   ', null])('preserves the original link when stop submits %j', async (value) => {
+    const form = new FormData();
+    if (value !== null) form.set('skill_id', value);
+    form.set('note', 'finished');
+    await expect(stopSession(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
+    expect(sessions.update).toHaveBeenCalledWith({ ended_at: expect.any(String), duration_sec: expect.any(Number), note: 'finished' });
+    expect(from).not.toHaveBeenCalledWith('skills');
+  });
+});
+
 describe("active session persistence", () => {
   const now = new Date("2026-09-29T12:00:00Z");
   const stale = { id: "session-1", started_at: "2026-09-26T12:00:00Z" };
@@ -139,7 +206,7 @@ describe("active session persistence", () => {
 
   it("redirects a unique violation to a friendly error", async () => {
     query.insert.mockResolvedValue({ error: { code: "23505" } });
-    await expect(startSession()).rejects.toThrow(
+    await expect(startSession(new FormData())).rejects.toThrow(
       "Redirect: /dashboard?error=" + encodeURIComponent("A session is already running.")
     );
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
@@ -147,7 +214,7 @@ describe("active session persistence", () => {
 
   it("keeps the ordinary start error for other failures", async () => {
     query.insert.mockResolvedValue({ error: { code: "42501" } });
-    await expect(startSession()).rejects.toThrow(
+    await expect(startSession(new FormData())).rejects.toThrow(
       "Redirect: /dashboard?error=" + encodeURIComponent("Couldn't start the session. Please try again.")
     );
   });

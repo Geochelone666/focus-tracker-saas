@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
-import { validateSessionNote } from "@/lib/validation";
+import { validateOptionalSkillId, validateSessionNote } from "@/lib/validation";
 import { classifyActiveSession, pickLatestActiveSession } from "@/lib/active-session";
 
 async function getAuthenticatedUser(context: string, message: string) {
@@ -29,15 +29,49 @@ async function getAuthenticatedUser(context: string, message: string) {
   return { supabase: auth.supabase, user: auth.user };
 }
 
-export async function startSession() {
+async function getOwnedSkillId(
+  formData: FormData,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<string | null> {
+  let skillId: string | null;
+  try {
+    skillId = validateOptionalSkillId(formData.get("skill_id"));
+  } catch {
+    redirect("/dashboard?error=" + encodeURIComponent("That skill could not be found"));
+  }
+  if (skillId === null) return null;
+
+  let found = false;
+  try {
+    const { data, error } = await supabase
+      .from("skills")
+      .select("id")
+      .eq("id", skillId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    found = data?.id === skillId;
+  } catch (error) {
+    console.error("[getOwnedSkillId] failed to read skill", error);
+  }
+  if (!found) {
+    redirect("/dashboard?error=" + encodeURIComponent("That skill could not be found"));
+  }
+  return skillId;
+}
+
+export async function startSession(formData: FormData) {
   const message = "Couldn't start the session. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("startSession", message);
+  const skillId = await getOwnedSkillId(formData, supabase, user.id);
 
   try {
     const { error } = await supabase.from("focus_sessions").insert({
       user_id: user.id,
       started_at: new Date().toISOString(),
-      ended_at: null
+      ended_at: null,
+      skill_id: skillId
     });
     if (error) throw error;
   } catch (error) {
@@ -47,6 +81,7 @@ export async function startSession() {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/skills");
   redirect("/dashboard");
 }
 
@@ -85,6 +120,7 @@ async function resolveStaleSession(action: "resume" | "discard") {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/skills");
   redirect("/dashboard");
 }
 
@@ -141,6 +177,7 @@ export async function stopSession(formData: FormData) {
 
   const message = "Couldn't stop the session. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("stopSession", message);
+  const skillId = await getOwnedSkillId(formData, supabase, user.id);
 
   try {
     const { data: activeSession, error: readError } = await supabase
@@ -164,7 +201,8 @@ export async function stopSession(formData: FormData) {
         .update({
           ended_at: now.toISOString(),
           duration_sec: durationSec,
-          note
+          note,
+          ...(skillId !== null ? { skill_id: skillId } : {})
         })
         .eq("id", activeSession.id)
         .eq("user_id", user.id);
@@ -176,5 +214,6 @@ export async function stopSession(formData: FormData) {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/skills");
   redirect("/dashboard");
 }

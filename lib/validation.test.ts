@@ -5,6 +5,7 @@ import {
   formatDuration,
   validateDurationMinutes,
   validateId,
+  validateOptionalSkillId,
   validateSessionNote,
   validateSkillName,
 } from './validation';
@@ -97,5 +98,20 @@ describe('formatDuration', () => {
     expect(formatDuration(1500)).toBe('25m');
     expect(formatDuration(3600)).toBe('1h');
     expect(formatDuration(5400)).toBe('1h 30m');
+  });
+});
+
+describe('validateOptionalSkillId', () => {
+  it.each(['', ' \t\n ', null, undefined])('returns null for an empty selection %j', (value) => {
+    expect(validateOptionalSkillId(value)).toBeNull();
+  });
+
+  it.each(['not-a-uuid', 123, {}, new Blob(['skill'])])('rejects invalid input %j', (value) => {
+    expect(() => validateOptionalSkillId(value)).toThrow();
+  });
+
+  it('returns a trimmed valid UUID', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(validateOptionalSkillId(`  ${id}  `)).toBe(id);
   });
 });

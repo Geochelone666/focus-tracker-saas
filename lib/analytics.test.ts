@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildAnalyticsDays,
+  buildSkillStats,
   formatDuration,
   getDateKey,
   getTorontoMidnight,
@@ -100,5 +101,37 @@ describe('sumDurations', () => {
   it('sums durations with null counting as zero and handles an empty list', () => {
     expect(sumDurations([{ duration_sec: 3600 }, { duration_sec: null }, { duration_sec: 120 }])).toBe(3720);
     expect(sumDurations([])).toBe(0);
+  });
+});
+
+describe('buildSkillStats', () => {
+  const weekStart = getTorontoMidnight(buildAnalyticsDays(new Date('2026-09-29T12:00:00Z'))[0].date);
+
+  it('sums durations and counts sessions separately for each skill', () => {
+    expect(buildSkillStats([
+      { skill_id: 'a', duration_sec: 120, started_at: '2026-09-24T12:00:00Z' },
+      { skill_id: 'b', duration_sec: 60, started_at: '2026-09-24T12:00:00Z' },
+      { skill_id: 'a', duration_sec: 180, started_at: '2026-09-25T12:00:00Z' }
+    ], weekStart)).toEqual(new Map([
+      ['a', { skillId: 'a', totalSec: 300, sessionCount: 2, weekSec: 300 }],
+      ['b', { skillId: 'b', totalSec: 60, sessionCount: 1, weekSec: 60 }]
+    ]));
+  });
+
+  it('includes the exact Toronto week boundary and excludes earlier starts from weekSec only', () => {
+    expect(buildSkillStats([
+      { skill_id: 'a', duration_sec: 120, started_at: '2026-09-23T03:59:59Z' },
+      { skill_id: 'a', duration_sec: 60, started_at: '2026-09-23T00:00:00-04:00' }
+    ], weekStart).get('a')).toEqual({ skillId: 'a', totalSec: 180, sessionCount: 2, weekSec: 60 });
+  });
+
+  it('ignores unlinked sessions and handles an empty list', () => {
+    expect(buildSkillStats([{ skill_id: null, duration_sec: 500, started_at: '2026-09-24T12:00:00Z' }], weekStart)).toEqual(new Map());
+    expect(buildSkillStats([], weekStart)).toEqual(new Map());
+  });
+
+  it('counts null durations as zero without losing the session count', () => {
+    expect(buildSkillStats([{ skill_id: 'a', duration_sec: null, started_at: '2026-09-24T12:00:00Z' }], weekStart).get('a'))
+      .toEqual({ skillId: 'a', totalSec: 0, sessionCount: 1, weekSec: 0 });
   });
 });
