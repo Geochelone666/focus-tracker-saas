@@ -108,6 +108,17 @@ export function formatDuration(
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
+/** Blank input clears the preference; otherwise require whole minutes in 1..1440. */
+export function validateDailyTargetMinutes(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const minutes = Number(trimmed);
+  if (!/^\d+$/.test(trimmed) || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+    throw new Error('Daily target must be a whole number between 1 and 1440 minutes');
+  }
+  return minutes;
+}
+
 /** Empty selections leave a session independent of any skill. */
 export function validateOptionalSkillId(value: unknown): string | null {
   if (value == null || (typeof value === "string" && value.trim() === "")) {

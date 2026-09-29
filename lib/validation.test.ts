@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   clampMinutes,
+  validateDailyTargetMinutes,
   formatDuration,
   validateDurationMinutes,
   validateId,
@@ -98,6 +99,15 @@ describe('formatDuration', () => {
     expect(formatDuration(1500)).toBe('25m');
     expect(formatDuration(3600)).toBe('1h');
     expect(formatDuration(5400)).toBe('1h 30m');
+  });
+});
+
+describe('validateDailyTargetMinutes', () => {
+  it.each([['', null], ['   ', null], ['120', 120], [' 90 ', 90], ['1', 1], ['1440', 1440]])('accepts %j', (input, expected) => {
+    expect(validateDailyTargetMinutes(input as string)).toBe(expected);
+  });
+  it.each(['0', '1500', 'abc', '12.5', '-1', '1e2', '+90', '12 0'])('rejects %j', (input) => {
+    expect(() => validateDailyTargetMinutes(input)).toThrow('Daily target must be a whole number between 1 and 1440 minutes');
   });
 });
 
