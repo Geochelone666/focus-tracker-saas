@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
-import { validateSessionNote } from "@/lib/validation";
+import { validateDailyTargetMinutes, validateSessionNote } from "@/lib/validation";
 
 async function getAuthenticatedUser(context: string, message: string) {
   let auth;
@@ -91,6 +91,34 @@ export async function stopSession(formData: FormData) {
     }
   } catch (error) {
     console.error("[stopSession] failed to stop session", error);
+    redirect("/dashboard?error=" + encodeURIComponent(message));
+  }
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}
+
+export async function updateDailyTarget(formData: FormData) {
+  const message = "Couldn't update the daily target. Please try again.";
+  const { supabase, user } = await getAuthenticatedUser("updateDailyTarget", message);
+  let minutes: number | null;
+  try {
+    const value = formData.get("target_minutes") ?? "";
+    if (typeof value !== "string") throw new Error("Invalid daily target");
+    minutes = validateDailyTargetMinutes(value);
+  } catch (error) {
+    redirect("/dashboard?error=" + encodeURIComponent(error instanceof Error ? error.message : message));
+  }
+
+  try {
+    const { error } = await supabase.from("profiles").upsert({
+      user_id: user.id,
+      daily_focus_target_minutes: minutes,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" });
+    if (error) throw error;
+  } catch (error) {
+    console.error("[updateDailyTarget] failed to update daily target", error);
     redirect("/dashboard?error=" + encodeURIComponent(message));
   }
 

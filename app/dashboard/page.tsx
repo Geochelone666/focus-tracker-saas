@@ -2,13 +2,15 @@ import {
   buildAnalyticsDays,
   formatDuration,
   getTorontoMidnight,
+  getTodayRangeUtc,
+  getDailyProgressPercent,
   groupSecondsByDay,
   sumDurations,
   type SessionDurationRow
 } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
-import { startSession, stopSession } from "@/app/dashboard/actions";
+import { startSession, stopSession, updateDailyTarget } from "@/app/dashboard/actions";
 
 type SessionRow = {
   id: string;
@@ -32,6 +34,32 @@ export default async function DashboardPage({
   if (!user) {
     redirect("/login");
   }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("daily_focus_target_minutes, timezone")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  if (!profile) {
+    const { error: createProfileError } = await supabase.from("profiles").upsert(
+      { user_id: user.id },
+      { onConflict: "user_id", ignoreDuplicates: true }
+    );
+    if (createProfileError) throw createProfileError;
+  }
+  const target = profile?.daily_focus_target_minutes ?? null;
+  const timezone = profile?.timezone ?? "America/Toronto";
+  const { startUtc, endUtc } = getTodayRangeUtc(new Date(), timezone);
+  const { data: todaySessions, error: todayError } = await supabase
+    .from("focus_sessions")
+    .select("duration_sec")
+    .eq("user_id", user.id)
+    .gte("started_at", startUtc.toISOString())
+    .lt("started_at", endUtc.toISOString());
+  if (todayError) throw todayError;
+  const todayMinutes = sumDurations(todaySessions ?? []) / 60;
+  const progressPercent = getDailyProgressPercent(todayMinutes, target);
 
   const { data: sessions } = await supabase
     .from("focus_sessions")
@@ -107,6 +135,46 @@ export default async function DashboardPage({
             </button>
           </form>
         </div>
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-lg font-semibold text-slate-900">Today&apos;s Focus Goal</h2>
+        {target !== null ? (
+          <>
+            <p className="mt-2 text-slate-700">{Math.floor(todayMinutes)} / {target} min today</p>
+            <div
+              className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100"
+              role="progressbar"
+              aria-label="Daily focus goal"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPercent ?? 0}
+            >
+              <div className="h-full rounded-full bg-slate-900" style={{ width: `${progressPercent}%` }} />
+            </div>
+          </>
+        ) : (
+          <p className="mt-2 text-slate-600">Set your daily focus goal</p>
+        )}
+        <form action={updateDailyTarget} className="mt-4 flex flex-wrap items-center gap-3">
+          <label htmlFor="target-minutes" className="sr-only">Daily target in minutes</label>
+          <input
+            id="target-minutes"
+            name="target_minutes"
+            type="number"
+            defaultValue={target ?? ""}
+            min={1}
+            max={1440}
+            step={1}
+            placeholder="minutes"
+            aria-describedby="target-help"
+            className="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+          <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
+            {target !== null ? "Save" : "Set target"}
+          </button>
+        </form>
+        <p id="target-help" className="mt-2 text-sm text-slate-600">Leave blank to clear your goal.</p>
       </section>
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">

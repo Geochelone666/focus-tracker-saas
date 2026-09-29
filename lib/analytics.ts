@@ -12,10 +12,14 @@ const analyticsDateFormatter = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit"
 });
 
-const timeZoneOffsetFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: ANALYTICS_TIME_ZONE,
-  timeZoneName: "longOffset"
-});
+function validTimeZone(timeZone: string): string {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return timeZone;
+  } catch {
+    return ANALYTICS_TIME_ZONE;
+  }
+}
 
 export function getDateKey(date: Date) {
   const parts = analyticsDateFormatter.formatToParts(date);
@@ -26,21 +30,50 @@ export function getDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export function getTorontoMidnight(date: Date) {
-  const utcMidnight = date.getTime();
-  const offsetPart = timeZoneOffsetFormatter
-    .formatToParts(date)
-    .find((part) => part.type === "timeZoneName")?.value;
-  const match = offsetPart?.match(/GMT([+-])(\d{2}):(\d{2})/);
-
-  if (!match) {
-    throw new Error("Could not determine the America/Toronto UTC offset.");
+/** Interpret the UTC calendar fields of date as a local calendar date. */
+export function getMidnightInTimeZone(date: Date, timeZone: string): Date {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: validTimeZone(timeZone),
+    timeZoneName: "longOffset"
+  });
+  const utcMidnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  let midnight = utcMidnight;
+  // Re-evaluate at the candidate instant: its offset can differ from UTC midnight.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const offset = formatter.formatToParts(new Date(midnight))
+      .find((part) => part.type === "timeZoneName")?.value;
+    const match = offset?.match(/GMT([+-])(\d{2}):(\d{2})/);
+    const minutes = match
+      ? (match[1] === "+" ? 1 : -1) * (Number(match[2]) * 60 + Number(match[3]))
+      : 0;
+    const candidate = utcMidnight - minutes * 60 * 1000;
+    if (candidate === midnight) break;
+    midnight = candidate;
   }
+  return new Date(midnight);
+}
 
-  const direction = match[1] === "+" ? 1 : -1;
-  const offsetMinutes = direction * (Number(match[2]) * 60 + Number(match[3]));
+export function getTorontoMidnight(date: Date): Date {
+  return getMidnightInTimeZone(date, ANALYTICS_TIME_ZONE);
+}
 
-  return new Date(utcMidnight - offsetMinutes * 60 * 1000);
+export function getTodayRangeUtc(now: Date, timeZone: string): { startUtc: Date; endUtc: Date } {
+  const zone = validTimeZone(timeZone);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(now);
+  const part = (type: string) => Number(parts.find((value) => value.type === type)?.value);
+  const today = new Date(Date.UTC(part("year"), part("month") - 1, part("day")));
+  const tomorrow = new Date(today);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  return {
+    startUtc: getMidnightInTimeZone(today, zone),
+    endUtc: getMidnightInTimeZone(tomorrow, zone)
+  };
+}
+
+export function getDailyProgressPercent(todayMinutes: number, targetMinutes: number | null): number | null {
+  return targetMinutes === null ? null : Math.min(100, Math.max(0, todayMinutes / targetMinutes * 100));
 }
 
 export function formatDuration(totalSeconds: number | null) {

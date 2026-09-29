@@ -5,6 +5,9 @@ import {
   formatDuration,
   getDateKey,
   getTorontoMidnight,
+  getMidnightInTimeZone,
+  getTodayRangeUtc,
+  getDailyProgressPercent,
   groupSecondsByDay,
   sumDurations,
 } from './analytics';
@@ -100,5 +103,55 @@ describe('sumDurations', () => {
   it('sums durations with null counting as zero and handles an empty list', () => {
     expect(sumDurations([{ duration_sec: 3600 }, { duration_sec: null }, { duration_sec: 120 }])).toBe(3720);
     expect(sumDurations([])).toBe(0);
+  });
+});
+
+describe('getMidnightInTimeZone', () => {
+  it.each([
+    ['2026-09-29', 'America/Toronto', '2026-09-29T04:00:00.000Z'],
+    ['2026-03-08', 'America/Toronto', '2026-03-08T05:00:00.000Z'],
+    ['2026-03-09', 'America/Toronto', '2026-03-09T04:00:00.000Z'],
+    ['2026-11-01', 'America/Toronto', '2026-11-01T04:00:00.000Z'],
+    ['2026-11-02', 'America/Toronto', '2026-11-02T05:00:00.000Z'],
+    ['2026-09-29', 'Asia/Tokyo', '2026-09-28T15:00:00.000Z'],
+    ['2026-09-29', 'UTC', '2026-09-29T00:00:00.000Z'],
+    ['2026-09-29', 'invalid/timezone', '2026-09-29T04:00:00.000Z'],
+  ])('converts %s in %s', (date, zone, expected) => {
+    expect(getMidnightInTimeZone(new Date(date), zone).toISOString()).toBe(expected);
+  });
+});
+
+describe('getTodayRangeUtc', () => {
+  it.each([
+    ['2026-09-29T15:00Z', 'America/Toronto', '2026-09-29T04:00:00.000Z', '2026-09-30T04:00:00.000Z', 24],
+    ['2026-03-08T15:00Z', 'America/Toronto', '2026-03-08T05:00:00.000Z', '2026-03-09T04:00:00.000Z', 23],
+    ['2026-11-01T15:00Z', 'America/Toronto', '2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z', 25],
+    ['2026-09-29T15:00Z', 'Asia/Tokyo', '2026-09-29T15:00:00.000Z', '2026-09-30T15:00:00.000Z', 24],
+    ['2026-09-29T15:00Z', 'invalid/timezone', '2026-09-29T04:00:00.000Z', '2026-09-30T04:00:00.000Z', 24],
+  ])('bounds %s in %s', (instant, zone, start, end, hours) => {
+    const now = new Date(instant);
+    const { startUtc, endUtc } = getTodayRangeUtc(now, zone);
+    expect(startUtc.toISOString()).toBe(start);
+    expect(endUtc.toISOString()).toBe(end);
+    expect((endUtc.getTime() - startUtc.getTime()) / 3600000).toBe(hours);
+    expect(now.getTime()).toBe(new Date(instant).getTime());
+  });
+
+  it('includes the entire fall-back day with an exclusive upper bound', () => {
+    const { startUtc, endUtc } = getTodayRangeUtc(new Date('2026-11-01T15:00Z'), 'America/Toronto');
+    const contains = (instant: string) => new Date(instant) >= startUtc && new Date(instant) < endUtc;
+    // November 1 at 03:30Z is October 31 at 23:30 locally.
+    expect(contains('2026-11-01T03:30Z')).toBe(false);
+    expect(contains('2026-11-01T04:00Z')).toBe(true);
+    expect(contains('2026-11-01T05:30Z')).toBe(true);
+    expect(contains('2026-11-01T06:30Z')).toBe(true);
+    expect(contains('2026-11-02T04:30Z')).toBe(true);
+    expect(contains('2026-11-02T05:00Z')).toBe(false);
+  });
+});
+
+describe('getDailyProgressPercent', () => {
+  it.each([[45, 120, 37.5], [200, 120, 100], [30, null, null], [-10, 120, 0], [0, 120, 0]])('calculates %s / %s', (minutes, target, expected) => {
+    expect(getDailyProgressPercent(minutes as number, target)).toBe(expected);
   });
 });
