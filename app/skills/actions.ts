@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
+import { validateSkillName } from "@/lib/validation";
 
 async function getAuthenticatedUser() {
   const supabase = await createClient();
@@ -19,9 +20,11 @@ async function getAuthenticatedUser() {
 
 export async function addSkill(formData: FormData) {
   const nameValue = formData.get("name");
-  const name = typeof nameValue === "string" ? nameValue.trim() : "";
 
-  if (name.length < 1 || name.length > 60) {
+  let name: string;
+  try {
+    name = validateSkillName(typeof nameValue === "string" ? nameValue : "");
+  } catch {
     return;
   }
 
