@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
-import { validateSkillName } from "@/lib/validation";
+import { validateId, validateSkillName } from "@/lib/validation";
 
 async function getAuthenticatedUser(context: string, message: string) {
   let auth;
@@ -56,6 +56,12 @@ export async function addSkill(formData: FormData) {
 }
 
 export async function toggleSkill(id: string, isDone: boolean) {
+  try {
+    id = validateId(id);
+  } catch {
+    redirect("/skills?error=" + encodeURIComponent("That skill couldn't be found. Please try again."));
+  }
+
   const message = "Couldn't update your skill. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("toggleSkill", message);
 
@@ -78,6 +84,12 @@ export async function toggleSkill(id: string, isDone: boolean) {
 }
 
 export async function deleteSkill(id: string) {
+  try {
+    id = validateId(id);
+  } catch {
+    redirect("/skills?error=" + encodeURIComponent("That skill couldn't be found. Please try again."));
+  }
+
   const message = "Couldn't delete your skill. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("deleteSkill", message);
 
