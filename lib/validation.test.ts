@@ -4,6 +4,7 @@ import {
   clampMinutes,
   formatDuration,
   validateDurationMinutes,
+  validateId,
   validateSessionNote,
   validateSkillName,
 } from './validation';
@@ -21,6 +22,31 @@ describe('validateSessionNote', () => {
   it('rejects notes longer than 200 characters', () => {
     expect(() => validateSessionNote('a'.repeat(201))).toThrow();
     expect(validateSessionNote('a'.repeat(200))).toBe('a'.repeat(200));
+  });
+});
+
+describe('validateId', () => {
+  it('trims and returns a valid UUID', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(validateId(`  ${id}  `)).toBe(id);
+  });
+
+  it('rejects an empty string', () => {
+    expect(() => validateId('')).toThrow('Id must not be empty');
+  });
+
+  it('rejects non-UUID garbage', () => {
+    expect(() => validateId('not-a-uuid')).toThrow('Id must be a valid UUID');
+  });
+
+  it('rejects whitespace-only input', () => {
+    expect(() => validateId(' \t\n ')).toThrow('Id must not be empty');
+  });
+
+  it('rejects non-string input', () => {
+    for (const id of [null, undefined, 123, {}]) {
+      expect(() => validateId(id)).toThrow('Id must be a string');
+    }
   });
 });
 

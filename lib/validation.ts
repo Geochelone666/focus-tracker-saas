@@ -23,6 +23,25 @@ export function validateSessionNote(note: string): string | null {
   return trimmed;
 }
 
+/** Normalize an id; rejects empty input and malformed UUIDs. */
+export function validateId(id: unknown): string {
+  if (typeof id !== 'string') {
+    throw new Error('Id must be a string');
+  }
+
+  const trimmed = id.trim();
+
+  if (trimmed.length === 0) {
+    throw new Error('Id must not be empty');
+  }
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    throw new Error('Id must be a valid UUID');
+  }
+
+  return trimmed;
+}
+
 /** Normalize a skill name; rejects empty and overly long names. */
 export function validateSkillName(name: string): string {
   const trimmed = name.trim();
