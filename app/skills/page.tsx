@@ -1,3 +1,4 @@
+import { buildAnalyticsDays, buildSkillStats, formatDuration, getTorontoMidnight } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { addSkill, deleteSkill, toggleSkill } from "@/app/skills/actions";
 import { createClient } from "@/supabase/server";
@@ -30,6 +31,14 @@ export default async function SkillsPage({
     .order("created_at", { ascending: false });
 
   const typedSkills = (skills ?? []) as SkillRow[];
+
+  const { data: sessions } = await supabase
+    .from("focus_sessions")
+    .select("skill_id, duration_sec, started_at")
+    .eq("user_id", user.id);
+  const weekStart = getTorontoMidnight(buildAnalyticsDays(new Date())[0].date);
+  const stats = buildSkillStats(sessions ?? [], weekStart);
+  const maxTotalSec = Math.max(0, ...typedSkills.map((skill) => stats.get(skill.id)?.totalSec ?? 0));
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
@@ -78,8 +87,12 @@ export default async function SkillsPage({
               const toggleAction = toggleSkill.bind(null, skill.id, !skill.is_done);
               const deleteAction = deleteSkill.bind(null, skill.id);
 
+              const stat = stats.get(skill.id);
+              const totalSec = stat?.totalSec ?? 0;
+              const barWidth = maxTotalSec === 0 ? 0 : (totalSec / maxTotalSec) * 100;
+
               return (
-                <li key={skill.id} className="flex items-center gap-3 py-3">
+                <li key={skill.id} className="flex flex-wrap items-center gap-3 py-3">
                   <form action={toggleAction}>
                     <button
                       type="submit"
@@ -110,6 +123,21 @@ export default async function SkillsPage({
                       Delete
                     </button>
                   </form>
+                  <div className="w-full">
+                    <dl className="mb-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+                      <div><dt>Total focus</dt><dd>{formatDuration(totalSec)}</dd></div>
+                      <div><dt>Sessions</dt><dd>{stat?.sessionCount ?? 0}</dd></div>
+                      <div><dt>This week</dt><dd>{formatDuration(stat?.weekSec ?? 0)}</dd></div>
+                    </dl>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-slate-900"
+                        style={{ width: `${barWidth}%` }}
+                        role="img"
+                        aria-label={`${skill.name}: ${formatDuration(totalSec)} total focus`}
+                      />
+                    </div>
+                  </div>
                 </li>
               );
             })}

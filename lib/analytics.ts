@@ -91,3 +91,37 @@ export function groupSecondsByDay(sessions: SessionDurationRow[], dayKeys: strin
 export function sumDurations(sessions: Array<{ duration_sec: number | null }>): number {
   return sessions.reduce((sum, row) => sum + (row.duration_sec ?? 0), 0);
 }
+
+export type SkillSessionRow = {
+  skill_id: string | null;
+  duration_sec: number | null;
+  started_at: string;
+};
+
+export type SkillStat = {
+  skillId: string;
+  totalSec: number;
+  sessionCount: number;
+  weekSec: number;
+};
+
+export function buildSkillStats(sessions: SkillSessionRow[], weekStart: Date): Map<string, SkillStat> {
+  const stats = new Map<string, SkillStat>();
+  for (const session of sessions) {
+    if (session.skill_id === null) continue;
+    const stat = stats.get(session.skill_id) ?? {
+      skillId: session.skill_id,
+      totalSec: 0,
+      sessionCount: 0,
+      weekSec: 0
+    };
+    const duration = session.duration_sec ?? 0;
+    stat.totalSec += duration;
+    stat.sessionCount += 1;
+    if (new Date(session.started_at).getTime() >= weekStart.getTime()) {
+      stat.weekSec += duration;
+    }
+    stats.set(session.skill_id, stat);
+  }
+  return stats;
+}
