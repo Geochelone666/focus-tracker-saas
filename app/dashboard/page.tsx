@@ -18,7 +18,12 @@ type SessionRow = {
   note: string | null;
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams
+}: {
+  searchParams: { error?: string | string[] };
+}) {
+  const error = typeof searchParams.error === "string" ? searchParams.error : undefined;
   const supabase = await createClient();
   const {
     data: { user }
@@ -65,6 +70,12 @@ export default async function DashboardPage() {
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
       <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
       <p className="mb-6 text-slate-600">You are logged in as {user.email}.</p>
+
+      {error && (
+        <div role="alert" className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
+          {error}
+        </div>
+      )}
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-lg font-semibold text-slate-900">Focus Summary (Last 7 Days)</h2>
