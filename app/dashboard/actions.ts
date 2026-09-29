@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
+import { validateSessionNote } from "@/lib/validation";
 
 async function getAuthenticatedUser(context: string, message: string) {
   let auth;
@@ -47,7 +48,16 @@ export async function startSession() {
   redirect("/dashboard");
 }
 
-export async function stopSession() {
+export async function stopSession(formData: FormData) {
+  let note: string | null;
+  try {
+    const value = formData.get("note") ?? "";
+    if (typeof value !== "string") throw new Error("Invalid note");
+    note = validateSessionNote(value);
+  } catch {
+    redirect("/dashboard?error=" + encodeURIComponent("Please enter a note of 200 characters or fewer."));
+  }
+
   const message = "Couldn't stop the session. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("stopSession", message);
 
@@ -72,7 +82,8 @@ export async function stopSession() {
         .from("focus_sessions")
         .update({
           ended_at: now.toISOString(),
-          duration_sec: durationSec
+          duration_sec: durationSec,
+          note
         })
         .eq("id", activeSession.id)
         .eq("user_id", user.id);

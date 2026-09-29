@@ -80,7 +80,7 @@ export default async function DashboardPage({
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-lg font-semibold text-slate-900">Focus Summary (Last 7 Days)</h2>
         <p className="mt-2 text-slate-700">Total focused time: {formatDuration(weeklyTotalSeconds)}</p>
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex flex-wrap gap-3">
           <form action={startSession}>
             <button
               type="submit"
@@ -89,7 +89,16 @@ export default async function DashboardPage({
               Start Session
             </button>
           </form>
-          <form action={stopSession}>
+          <form action={stopSession} className="flex flex-wrap items-center gap-3">
+            <label htmlFor="session-note" className="sr-only">Session note (optional)</label>
+            <input
+              id="session-note"
+              name="note"
+              type="text"
+              maxLength={200}
+              placeholder="What did you work on? (optional)"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm sm:w-80"
+            />
             <button
               type="submit"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
