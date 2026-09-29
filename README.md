@@ -132,3 +132,9 @@ To enable it in your Supabase project:
 3. Run `db/rls.sql` to enable RLS and apply per-user CRUD policies.
 
 The dashboard uses the authenticated SSR user session (no service role key) to create, stop, and read each user's own focus sessions.
+
+## Skills
+
+The protected `/skills` page provides a personal checklist where authenticated users can add, complete, and delete skills.
+
+Before using the page, apply both `db/schema.sql` and `db/rls.sql` in your Supabase project. These scripts create the `skills` table and enable per-user row-level security policies so users can only access their own checklist items.
