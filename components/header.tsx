@@ -21,6 +21,9 @@ export async function Header() {
             <Link href="/dashboard" className="text-sm font-medium text-slate-900 underline underline-offset-4">
               Dashboard
             </Link>
+            <Link href="/skills" className="text-sm font-medium text-slate-900 underline underline-offset-4">
+              Skills
+            </Link>
             <form action={logout}>
               <button
                 type="submit"
