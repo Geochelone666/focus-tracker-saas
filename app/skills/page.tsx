@@ -1,3 +1,4 @@
+import { readAllRows } from "@/lib/paginated-query";
 import { buildAnalyticsDays, buildSkillStats, formatDuration, getTorontoMidnight } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { addSkill, deleteSkill, toggleSkill } from "@/app/skills/actions";
@@ -32,10 +33,12 @@ export default async function SkillsPage({
 
   const typedSkills = (skills ?? []) as SkillRow[];
 
-  const { data: sessions } = await supabase
+  const sessions = await readAllRows((from, to) => supabase
     .from("focus_sessions")
     .select("skill_id, duration_sec, started_at")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .order("id")
+    .range(from, to));
   const weekStart = getTorontoMidnight(buildAnalyticsDays(new Date())[0].date);
   const stats = buildSkillStats(sessions ?? [], weekStart);
   const maxTotalSec = Math.max(0, ...typedSkills.map((skill) => stats.get(skill.id)?.totalSec ?? 0));
