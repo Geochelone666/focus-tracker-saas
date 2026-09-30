@@ -1,3 +1,4 @@
+import { readAllRows } from "@/lib/paginated-query";
 import {
   buildAnalyticsDays,
   formatDuration,
@@ -73,13 +74,14 @@ export default async function DashboardPage({
   const target = profile?.daily_focus_target_minutes ?? null;
   const timezone = profile?.timezone ?? "America/Toronto";
   const { startUtc, endUtc } = getTodayRangeUtc(new Date(), timezone);
-  const { data: todaySessions, error: todayError } = await supabase
+  const todaySessions = await readAllRows((from, to) => supabase
     .from("focus_sessions")
     .select("duration_sec")
     .eq("user_id", user.id)
     .gte("started_at", startUtc.toISOString())
-    .lt("started_at", endUtc.toISOString());
-  if (todayError) throw todayError;
+    .lt("started_at", endUtc.toISOString())
+    .order("id")
+    .range(from, to));
   const todayMinutes = sumDurations(todaySessions ?? []) / 60;
   const progressPercent = getDailyProgressPercent(todayMinutes, target);
 
@@ -105,12 +107,14 @@ export default async function DashboardPage({
   const analyticsStart = getTorontoMidnight(analyticsDays[0].date).toISOString();
   const analyticsEnd = getTorontoMidnight(tomorrow).toISOString();
 
-  const { data: weeklySessions } = await supabase
+  const weeklySessions = await readAllRows((from, to) => supabase
     .from("focus_sessions")
     .select("started_at, duration_sec")
     .eq("user_id", user.id)
     .gte("started_at", analyticsStart)
-    .lt("started_at", analyticsEnd);
+    .lt("started_at", analyticsEnd)
+    .order("id")
+    .range(from, to));
 
   const typedWeeklySessions: SessionDurationRow[] = (weeklySessions ?? []) as SessionDurationRow[];
 
@@ -125,7 +129,7 @@ export default async function DashboardPage({
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
       <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-      <p className="mb-6 text-slate-600">You are logged in as {user.email}.</p>
+      <p className="mb-6 break-words text-slate-600">You are logged in as {user.email}.</p>
 
       {error && (
         <div role="alert" className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
@@ -154,13 +158,13 @@ export default async function DashboardPage({
           <>
             {activeState === "active" && latest && <SessionTimer key={latest.started_at} startedAt={latest.started_at} />}
             <div className="mt-4 flex flex-wrap gap-3">
-              {activeState === "none" && <form action={startSession} className="flex flex-wrap items-center gap-3">
+              {activeState === "none" && <form action={startSession} className="flex min-w-0 flex-wrap items-center gap-3">
                 <label htmlFor="start-skill" className="text-sm text-slate-700">Skill (optional)</label>
                 <select
                   id="start-skill"
                   name="skill_id"
                   defaultValue=""
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                  className="min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">No skill</option>
                   {(skills ?? []).map((skill) => (
@@ -174,13 +178,14 @@ export default async function DashboardPage({
                   Start Session
                 </button>
               </form>}
-              <form action={stopSession} className="flex flex-wrap items-center gap-3">
+              {activeState === "active" && <form action={stopSession} className="flex min-w-0 flex-wrap items-center gap-3">
+                <input type="hidden" name="session_id" value={latest?.id ?? ""} />
                 <label htmlFor="stop-skill" className="text-sm text-slate-700">Skill (optional)</label>
                 <select
                   id="stop-skill"
                   name="skill_id"
                   defaultValue={latest?.skill_id ?? ""}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                  className="min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">{latest?.skill_id ? "Keep current skill" : "No skill"}</option>
                   {(skills ?? []).map((skill) => (
@@ -202,7 +207,7 @@ export default async function DashboardPage({
                 >
                   Stop Session
                 </button>
-              </form>
+              </form>}
             </div>
           </>
         )}

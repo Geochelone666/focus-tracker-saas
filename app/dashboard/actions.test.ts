@@ -29,7 +29,7 @@ describe("stopSession notes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     query.maybeSingle.mockResolvedValue({
-      data: { id: "session-1", started_at: new Date(Date.now() - 60000).toISOString() },
+      data: { id: "11111111-1111-4111-8111-111111111111", started_at: new Date(Date.now() - 60000).toISOString() },
       error: null
     });
     mocks.createClient.mockResolvedValue({
@@ -46,6 +46,7 @@ describe("stopSession notes", () => {
     ["a".repeat(200), "a".repeat(200)]
   ])("stores the validated note for %j", async (input, expected) => {
     const form = new FormData();
+    form.set("session_id", "11111111-1111-4111-8111-111111111111");
     if (input !== null) form.set("note", input);
 
     await expect(stopSession(form)).rejects.toThrow("Redirect: /dashboard");
@@ -55,13 +56,14 @@ describe("stopSession notes", () => {
       ended_at: expect.any(String),
       duration_sec: expect.any(Number)
     });
-    expect(query.eq).toHaveBeenCalledWith("id", "session-1");
+    expect(query.eq).toHaveBeenCalledWith("id", "11111111-1111-4111-8111-111111111111");
     expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
   });
 
   it.each(["too long", "file"])("rejects a %s note before writing", async (kind) => {
     const form = new FormData();
+    form.set("session_id", "11111111-1111-4111-8111-111111111111");
     form.set("note", kind === "file" ? new Blob(["note"]) : "a".repeat(201));
 
     await expect(stopSession(form)).rejects.toThrow(
@@ -85,7 +87,7 @@ describe('session skill linking', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     skills.maybeSingle.mockResolvedValue({ data: { id: skillId }, error: null });
-    sessions.maybeSingle.mockResolvedValue({ data: { id: 'session-1', started_at: new Date(Date.now() - 60000).toISOString() }, error: null });
+    sessions.maybeSingle.mockResolvedValue({ data: { id: '11111111-1111-4111-8111-111111111111', started_at: new Date(Date.now() - 60000).toISOString() }, error: null });
     sessions.insert.mockResolvedValue({ error: null });
     from.mockImplementation((table: string) => table === 'skills' ? skills : sessions);
     mocks.createClient.mockResolvedValue({
@@ -95,6 +97,7 @@ describe('session skill linking', () => {
 
   it.each([startSession, stopSession])('checks ownership before linking a skill', async (action) => {
     const form = new FormData();
+    form.set("session_id", "11111111-1111-4111-8111-111111111111");
     form.set('skill_id', skillId);
     form.set('note', '  deep work  ');
     await expect(action(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
@@ -108,6 +111,7 @@ describe('session skill linking', () => {
   it.each([startSession, stopSession])('rejects a missing or unowned skill before writing', async (action) => {
     skills.maybeSingle.mockResolvedValue({ data: null, error: null });
     const form = new FormData();
+    form.set("session_id", "11111111-1111-4111-8111-111111111111");
     form.set('skill_id', skillId);
     await expect(action(form)).rejects.toThrow('Redirect: /dashboard?error=' + encodeURIComponent('That skill could not be found'));
     expect(sessions.insert).not.toHaveBeenCalled();
@@ -116,6 +120,7 @@ describe('session skill linking', () => {
 
   it.each([startSession, stopSession])('rejects a malformed skill before querying or writing', async (action) => {
     const form = new FormData();
+    form.set("session_id", "11111111-1111-4111-8111-111111111111");
     form.set('skill_id', 'bad-id');
     await expect(action(form)).rejects.toThrow('Redirect: /dashboard?error=' + encodeURIComponent('That skill could not be found'));
     expect(from).not.toHaveBeenCalled();
@@ -123,6 +128,7 @@ describe('session skill linking', () => {
 
   it.each(['', '   ', null])('starts without a skill for %j', async (value) => {
     const form = new FormData();
+    form.set("session_id", "11111111-1111-4111-8111-111111111111");
     if (value !== null) form.set('skill_id', value);
     await expect(startSession(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
     expect(sessions.insert).toHaveBeenCalledWith(expect.objectContaining({ skill_id: null }));
@@ -131,6 +137,7 @@ describe('session skill linking', () => {
 
   it.each(['', '   ', null])('preserves the original link when stop submits %j', async (value) => {
     const form = new FormData();
+    form.set("session_id", "11111111-1111-4111-8111-111111111111");
     if (value !== null) form.set('skill_id', value);
     form.set('note', 'finished');
     await expect(stopSession(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
@@ -141,7 +148,7 @@ describe('session skill linking', () => {
 
 describe("active session persistence", () => {
   const now = new Date("2026-09-29T12:00:00Z");
-  const stale = { id: "session-1", started_at: "2026-09-26T12:00:00Z" };
+  const stale = { id: "11111111-1111-4111-8111-111111111111", started_at: "2026-09-26T12:00:00Z" };
   const query = {
     select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),

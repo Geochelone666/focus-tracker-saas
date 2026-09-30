@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
-import { validateDailyTargetMinutes, validateOptionalSkillId, validateSessionNote } from "@/lib/validation";
+import { validateDailyTargetMinutes, validateId, validateOptionalSkillId, validateSessionNote } from "@/lib/validation";
 import { classifyActiveSession, pickLatestActiveSession } from "@/lib/active-session";
 
 async function getAuthenticatedUser(context: string, message: string) {
@@ -177,12 +177,19 @@ export async function stopSession(formData: FormData) {
 
   const message = "Couldn't stop the session. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("stopSession", message);
+  let sessionId: string;
+  try {
+    sessionId = validateId(formData.get("session_id"));
+  } catch {
+    redirect("/dashboard?error=" + encodeURIComponent("That session could not be found. Please refresh and try again."));
+  }
   const skillId = await getOwnedSkillId(formData, supabase, user.id);
 
   try {
     const { data: activeSession, error: readError } = await supabase
       .from("focus_sessions")
       .select("id, started_at")
+      .eq("id", sessionId)
       .eq("user_id", user.id)
       .is("ended_at", null)
       .order("started_at", { ascending: false })
@@ -205,7 +212,9 @@ export async function stopSession(formData: FormData) {
           ...(skillId !== null ? { skill_id: skillId } : {})
         })
         .eq("id", activeSession.id)
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("started_at", activeSession.started_at)
+        .is("ended_at", null);
       if (error) throw error;
     }
   } catch (error) {
