@@ -15,6 +15,12 @@ import { cleanupDuplicateActiveSessions, discardStaleSession, resumeStaleSession
 import { classifyActiveSession, pickLatestActiveSession } from "@/lib/active-session";
 import { SessionTimer } from "@/components/session-timer";
 
+const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Toronto",
+  dateStyle: "medium",
+  timeStyle: "short"
+});
+
 type SessionRow = {
   id: string;
   started_at: string;
@@ -272,9 +278,9 @@ export default async function DashboardPage({
               <tbody>
                 {typedSessions.map((session: SessionRow) => (
                   <tr key={session.id} className="border-b border-slate-100">
-                    <td className="px-2 py-2 text-slate-800">{new Date(session.started_at).toLocaleString()}</td>
+                    <td className="px-2 py-2 text-slate-800">{dateFormatter.format(new Date(session.started_at))}</td>
                     <td className="px-2 py-2 text-slate-800">
-                      {session.ended_at ? new Date(session.ended_at).toLocaleString() : "Active"}
+                      {session.ended_at ? dateFormatter.format(new Date(session.ended_at)) : "Active"}
                     </td>
                     <td className="px-2 py-2 text-slate-800">{formatDuration(session.duration_sec)}</td>
                     <td className="px-2 py-2 text-slate-800">{session.note ?? "-"}</td>
