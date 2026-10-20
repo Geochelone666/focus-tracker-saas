@@ -24,8 +24,8 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     <form className="mb-6 flex flex-wrap items-end gap-3">
       <input type="hidden" name="view" value={view} />
       <label className="text-sm">Search<input name="q" defaultValue={query} maxLength={120} placeholder="Title or notes" className="mt-1 block rounded border px-3 py-2" /></label>
-      <label className="text-sm">Status<select name="status" defaultValue={params.status ?? ''} className="mt-1 block rounded border bg-white px-3 py-2"><option value="">All statuses</option><option value="open">Open</option><option value="completed">Completed</option></select></label>
-      <label className="text-sm">Energy<select name="energy" defaultValue={params.energy ?? ''} className="mt-1 block rounded border bg-white px-3 py-2"><option value="">All energy levels</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+      <label className="text-sm">Status<select aria-label="Status" name="status" defaultValue={params.status ?? ''} className="mt-1 block rounded border bg-white px-3 py-2"><option value="">All statuses</option><option value="open">Open</option><option value="completed">Completed</option></select></label>
+      <label className="text-sm">Energy<select aria-label="Energy" name="energy" defaultValue={params.energy ?? ''} className="mt-1 block rounded border bg-white px-3 py-2"><option value="">All energy levels</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
       <button className="rounded border px-3 py-2 text-sm">Search & filter</button>
     </form>
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">

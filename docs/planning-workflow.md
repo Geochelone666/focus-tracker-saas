@@ -41,3 +41,7 @@ Daily statistics assign an entire session to its start date, consistent with the
 - Check phone layout and theme switching.
 
 `supabase/tests/planning_workflow.sql` provides transactional ownership and series-edit regression checks. It needs two existing test accounts and rolls its fixture changes back. Local database validation is independent of live Supabase project credentials; live deployment readiness still requires applying the migration and testing your actual authentication/project configuration.
+
+## Validation for this update
+
+The update passed 201 unit tests, TypeScript checking, lint, and a production build. PostgreSQL-compatible local regression checks exercised the migration, RLS ownership, reversible removal, and atomic series edits. Browser checks used isolated local API fixtures (not the production Supabase project) and covered all screens, task capture/completion/reopening/moving, linked focus start/stop, Trash restore, project creation, timezone/theme persistence, mobile layout, daily/weekly recurrence controls, future edits preserving completed occurrences, failed-save input retention and retry, reflection persistence, and the home-screen manifest. Live deployment still requires applying migration 009 and checking the actual project configuration with a test account.

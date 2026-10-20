@@ -30,7 +30,7 @@ export async function createPlan(_state: PlanState, form: FormData): Promise<Pla
     if (error) return { error: 'Could not save. Please check your project/skill selection and try again.' };
   } catch { return { error: 'Could not connect. Your input has been kept; please try again.' }; }
   refresh(destination(form));
-  if (destination(form) === '/calendar') redirect(plan.scheduled_date ? '/calendar?date=' + plan.scheduled_date : '/inbox');
+  if (destination(form) === '/calendar' && plan.scheduled_date !== form.get('return_date')) redirect(plan.scheduled_date ? '/calendar?date=' + plan.scheduled_date : '/inbox');
   return { success: dates.length > 1 ? `Created ${dates.length} occurrences. Each can be completed separately.` : 'Saved. Your plan is ready.', savedAt: Date.now() };
 }
 
@@ -49,7 +49,7 @@ export async function editPlan(id: string, _state: PlanState, form: FormData): P
     if (error || !data) return { error: 'Could not update this plan. Check the date and project/skill selection, then retry.' };
   } catch { return { error: 'Could not connect. Your changes have been kept; please try again.' }; }
   refresh(destination(form));
-  if (destination(form) === '/calendar') redirect(plan.scheduled_date ? '/calendar?date=' + plan.scheduled_date : '/inbox');
+  if (destination(form) === '/calendar' && plan.scheduled_date !== form.get('return_date')) redirect(plan.scheduled_date ? '/calendar?date=' + plan.scheduled_date : '/inbox');
   return { success: 'Changes saved.', savedAt: Date.now() };
 }
 
