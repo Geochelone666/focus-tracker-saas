@@ -9,3 +9,23 @@
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
 }
+
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="dark"] body { background: #020617; color: #e2e8f0; }
+html[data-theme="dark"] .bg-white { background-color: #0f172a; }
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-100 { background-color: #1e293b; }
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800 { color: #f1f5f9; }
+html[data-theme="dark"] .text-slate-700,
+html[data-theme="dark"] .text-slate-600 { color: #cbd5e1; }
+html[data-theme="dark"] .text-slate-500 { color: #94a3b8; }
+html[data-theme="dark"] .border,
+html[data-theme="dark"] .border-b,
+html[data-theme="dark"] .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: #334155; }
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select { background-color: #0f172a; color: #f1f5f9; }
+html[data-theme="dark"] .hover\:bg-slate-100:hover { background-color: #334155; }
+html[data-theme="dark"] .bg-slate-900 { background-color: #e2e8f0; color: #0f172a; }
+html[data-theme="dark"] .bg-slate-900:hover { background-color: #cbd5e1; }

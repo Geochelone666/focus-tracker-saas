@@ -64,14 +64,24 @@ async function getOwnedSkillId(
 export async function startSession(formData: FormData) {
   const message = "Couldn't start the session. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("startSession", message);
-  const skillId = await getOwnedSkillId(formData, supabase, user.id);
+  let skillId = await getOwnedSkillId(formData, supabase, user.id);
+  let scheduleId: string | null;
+  try { scheduleId = validateOptionalSkillId(formData.get('schedule_id')); }
+  catch { redirect('/today?error=' + encodeURIComponent('This plan could not be found.')); }
+  if (scheduleId) {
+    const { data: schedule, error } = await supabase.from('schedules').select('id,skill_id,is_done,deleted_at')
+      .eq('id',scheduleId).eq('user_id',user.id).maybeSingle();
+    if (error || !schedule || schedule.is_done || schedule.deleted_at) redirect('/today?error=' + encodeURIComponent('Choose an open plan that belongs to you.'));
+    skillId = skillId ?? schedule.skill_id;
+  }
 
   try {
     const { error } = await supabase.from("focus_sessions").insert({
       user_id: user.id,
       started_at: new Date().toISOString(),
       ended_at: null,
-      skill_id: skillId
+      skill_id: skillId,
+      ...(scheduleId ? { schedule_id: scheduleId } : {})
     });
     if (error) throw error;
   } catch (error) {
@@ -80,6 +90,7 @@ export async function startSession(formData: FormData) {
     redirect("/dashboard?error=" + encodeURIComponent(alreadyRunning ? "A session is already running." : message));
   }
 
+  if (scheduleId) { revalidatePath("/today"); redirect("/today"); }
   revalidatePath("/dashboard");
   revalidatePath("/skills");
   redirect("/dashboard");
@@ -222,6 +233,7 @@ export async function stopSession(formData: FormData) {
     redirect("/dashboard?error=" + encodeURIComponent(message));
   }
 
+  if (formData.get("return_to") === "/today") { revalidatePath("/today"); redirect("/today"); }
   revalidatePath("/dashboard");
   revalidatePath("/skills");
   redirect("/dashboard");

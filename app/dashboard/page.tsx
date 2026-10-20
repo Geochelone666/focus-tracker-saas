@@ -1,8 +1,9 @@
+import { timezone as normalizeTimezone } from "@/lib/planning";
 import { readAllRows } from "@/lib/paginated-query";
 import {
   buildAnalyticsDays,
   formatDuration,
-  getTorontoMidnight,
+  getMidnightInTimeZone,
   getTodayRangeUtc,
   getDailyProgressPercent,
   groupSecondsByDay,
@@ -14,12 +15,6 @@ import { createClient } from "@/supabase/server";
 import { cleanupDuplicateActiveSessions, discardStaleSession, resumeStaleSession, startSession, stopSession, updateDailyTarget } from "@/app/dashboard/actions";
 import { classifyActiveSession, pickLatestActiveSession } from "@/lib/active-session";
 import { SessionTimer } from "@/components/session-timer";
-
-const dateFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Toronto",
-  dateStyle: "medium",
-  timeStyle: "short"
-});
 
 type SessionRow = {
   id: string;
@@ -79,7 +74,8 @@ export default async function DashboardPage({
     if (createProfileError) throw createProfileError;
   }
   const target = profile?.daily_focus_target_minutes ?? null;
-  const timezone = profile?.timezone ?? "America/Toronto";
+  const timezone = normalizeTimezone(profile?.timezone);
+  const dateFormatter = new Intl.DateTimeFormat('en-CA', {timeZone: timezone, dateStyle:'medium',timeStyle:'short'});
   const { startUtc, endUtc } = getTodayRangeUtc(new Date(), timezone);
   const todaySessions = await readAllRows((from, to) => supabase
     .from("focus_sessions")
@@ -107,12 +103,12 @@ export default async function DashboardPage({
     .eq("user_id", user.id)
     .order("name", { ascending: true });
 
-  const analyticsDays = buildAnalyticsDays(new Date());
+  const analyticsDays = buildAnalyticsDays(new Date(), timezone);
   const today = analyticsDays[analyticsDays.length - 1].date;
   const tomorrow = new Date(today);
   tomorrow.setUTCDate(today.getUTCDate() + 1);
-  const analyticsStart = getTorontoMidnight(analyticsDays[0].date).toISOString();
-  const analyticsEnd = getTorontoMidnight(tomorrow).toISOString();
+  const analyticsStart = getMidnightInTimeZone(analyticsDays[0].date, timezone).toISOString();
+  const analyticsEnd = getMidnightInTimeZone(tomorrow, timezone).toISOString();
 
   const weeklySessions = await readAllRows((from, to) => supabase
     .from("focus_sessions")
@@ -126,7 +122,7 @@ export default async function DashboardPage({
   const typedWeeklySessions: SessionDurationRow[] = (weeklySessions ?? []) as SessionDurationRow[];
 
   const weeklyTotalSeconds = sumDurations(typedWeeklySessions);
-  const secondsByDay = groupSecondsByDay(typedWeeklySessions, analyticsDays.map((day) => day.key));
+  const secondsByDay = groupSecondsByDay(typedWeeklySessions, analyticsDays.map((day) => day.key), timezone);
   const dailyFocus = analyticsDays.map((day) => ({
     ...day,
     minutes: Math.floor((secondsByDay.get(day.key) ?? 0) / 60)
@@ -295,7 +291,7 @@ export default async function DashboardPage({
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-lg font-semibold text-slate-900">Last 7 days</h2>
-        <p className="mt-1 text-sm text-slate-600">Focused minutes per day in America/Toronto.</p>
+        <p className="mt-1 text-sm text-slate-600">Focused minutes per day in {timezone}.</p>
         <div className="mt-5 space-y-4">
           {dailyFocus.map((day) => {
             const barWidth = maximumDailyMinutes === 0 ? 0 : (day.minutes / maximumDailyMinutes) * 100;

@@ -3,7 +3,8 @@ import "./globals.css";
 import { Header } from "@/components/header";
 
 export const metadata: Metadata = {
-  title: "Focus Tracker SaaS",
+  title: "Focus Tracker",
+  icons: { icon: "/icon.svg" },
   description: "Plan your day, track focus sessions, and build your skills."
 };
 

@@ -255,3 +255,26 @@ describe("active session persistence", () => {
     expect(query.update).not.toHaveBeenCalled();
   });
 });
+
+describe('schedule focus linking', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const query = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn() };
+  const insert = vi.fn();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    query.maybeSingle.mockResolvedValue({ data: { id, skill_id: null, is_done: false, deleted_at: null }, error: null });
+    insert.mockResolvedValue({error:null});
+    mocks.createClient.mockResolvedValue({ auth: {getUser: async()=>({data:{user:{id:'owner'}},error:null})}, from:(table:string)=>table==='schedules'?query:{insert} });
+  });
+  it('links an owned open plan and returns to Today',async()=>{
+    const form=new FormData();form.set('schedule_id',id);
+    await expect(startSession(form)).rejects.toThrow('Redirect: /today');
+    expect(query.eq).toHaveBeenCalledWith('user_id','owner');
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({schedule_id:id,user_id:'owner'}));
+  });
+  it.each([null,{id,skill_id:null,is_done:true,deleted_at:null},{id,skill_id:null,is_done:false,deleted_at:'2026-10-20'}])('rejects unavailable, completed or removed plans',async data=>{
+    query.maybeSingle.mockResolvedValue({data,error:null});
+    const form=new FormData();form.set('schedule_id',id);
+    await expect(startSession(form)).rejects.toThrow('Redirect: /today?error=');expect(insert).not.toHaveBeenCalled();
+  });
+});

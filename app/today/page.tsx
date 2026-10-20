@@ -1,0 +1,74 @@
+import Link from 'next/link';
+import { planningContext, planningData } from '@/lib/planning-data';
+import { addDays, dayKey, plannedMinutes, sortPlans } from '@/lib/planning';
+import { readAllRows } from '@/lib/paginated-query';
+import { PlanForm } from '@/components/plan-form';
+import { PlanCard } from '@/components/plan-card';
+import { ReflectionForm } from '@/components/planning-forms';
+import { Reminders } from '@/components/reminders';
+import { SessionTimer } from '@/components/session-timer';
+import { classifyActiveSession } from '@/lib/active-session';
+import { stopSession } from '@/app/dashboard/actions';
+import { SubmitButton } from '@/components/submit-button';
+
+export default async function TodayPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const params = await searchParams;
+  const context = await planningContext();
+  const { supabase, user, today, zone, target } = context;
+  const { schedules, projects, skills } = await planningData(context);
+  const live = schedules.filter(item => !item.deleted_at);
+  const plans = sortPlans(live.filter(item => item.scheduled_date === today));
+  const overdue = sortPlans(live.filter(item => item.scheduled_date && item.scheduled_date < today && !item.is_done));
+  const sessions = await readAllRows<{ id: string; schedule_id: string | null; started_at: string; ended_at: string | null; duration_sec: number | null }>((from,to) => supabase.from('focus_sessions')
+    .select('id,schedule_id,started_at,ended_at,duration_sec').eq('user_id',user.id).order('id').range(from,to));
+  const active = sessions.filter(item => !item.ended_at).sort((a,b) => b.started_at.localeCompare(a.started_at))[0];
+  const stale = active && classifyActiveSession(active.started_at,new Date()) === 'stale';
+  const activePlan = active ? live.find(plan => plan.id === active.schedule_id) : null;
+  const focused = sessions.filter(item => dayKey(new Date(item.started_at), zone) === today).reduce((sum,item) => sum + (item.duration_sec ?? 0),0) / 60;
+  const estimated = plannedMinutes(plans);
+  const withBreaks = plannedMinutes(plans, 5);
+  const { data: reflection, error } = await supabase.from('daily_reflections').select('note').eq('user_id',user.id).eq('day',today).maybeSingle();
+  if (error) throw error;
+  const actual = (id: string) => sessions.filter(session => session.schedule_id === id).reduce((sum,item) => sum + (item.duration_sec ?? 0),0) / 60;
+  return <main className="mx-auto max-w-5xl px-4 py-10">
+    <h1 className="text-3xl font-bold">Today</h1>
+    <p className="mt-2 text-slate-600">{today} · {zone} · One step at a time.</p>
+    {typeof params.error === 'string' && <p role="alert" className="mt-4 text-red-800">{params.error}</p>}
+    <div className="my-6 grid gap-3 sm:grid-cols-3">
+      <div className="rounded-lg border bg-white p-4"><p className="text-sm text-slate-500">Plans completed</p><p className="text-2xl font-semibold">{plans.filter(item => item.is_done).length} / {plans.length}</p></div>
+      <div className="rounded-lg border bg-white p-4"><p className="text-sm text-slate-500">Focused today</p><p className="text-2xl font-semibold">{Math.floor(focused)}m{target ? ` / ${target}m` : ''}</p><Link href="/dashboard" className="text-sm underline">Manage focus goal</Link></div>
+      <div className="rounded-lg border bg-white p-4"><p className="text-sm text-slate-500">Remaining planned work</p><p className="text-2xl font-semibold">{estimated}m</p><p className="text-xs text-slate-500">{withBreaks}m with 5-minute buffers</p></div>
+    </div>
+    {estimated > 480 && <p role="status" className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900">More than 8 hours are planned. Consider moving a few items or leaving room for breaks.</p>}
+    {active && <section className="mb-6 rounded-lg border bg-white p-5">
+      <h2 className="font-semibold">Focusing{activePlan ? `: ${activePlan.title}` : ''}</h2>
+      {stale ? <p className="mt-3 text-sm text-slate-600">This session has been running for over 12 hours. Open Focus to resume or discard it before recording more time.</p> : <>
+      <SessionTimer startedAt={active.started_at} />
+      <form action={stopSession} className="mt-4 flex flex-wrap gap-3">
+        <input type="hidden" name="session_id" value={active.id} /><input type="hidden" name="return_to" value="/today" />
+        <label className="sr-only" htmlFor="focus-note">Focus note</label><input id="focus-note" name="note" maxLength={200} placeholder="What did you work on? (optional)" className="rounded border px-3 py-2" />
+        <SubmitButton label="Stop focus" pendingLabel="Stopping…" />
+      </form>
+      <p className="mt-2 text-xs text-slate-500">Stopping records your time. Mark the plan complete separately when you are ready.</p>
+      </>}
+      <Link href="/dashboard" className="text-sm underline">Session recovery and details</Link>
+    </section>}
+    <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <div>
+        <section><h2 className="mb-3 text-xl font-semibold">Your day</h2>
+          {plans.length === 0 && <p className="mb-4 text-slate-500">A fresh start. Add a plan or pick something from your Inbox.</p>}
+          <ul className="space-y-3">{plans.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
+        </section>
+        {overdue.length > 0 && <section className="mt-6"><h2 className="mb-3 text-xl font-semibold">Carry-over · {overdue.length}</h2><p className="mb-3 text-sm text-slate-600">Plans change. Choose what still matters and reschedule the rest.</p>
+          <ul className="space-y-3">{overdue.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
+        </section>}
+      </div>
+      <aside className="space-y-6">
+        <section className="rounded-lg border bg-white p-5"><h2 className="mb-3 font-semibold">Quick add</h2><PlanForm date={today} projects={projects.filter(p => !p.is_done)} skills={skills} /></section>
+        <Reminders items={live.filter(plan => !plan.is_done && (plan.scheduled_date === today || plan.scheduled_date === addDays(today,1)))} zone={zone} userId={user.id} date={today} />
+        <section className="rounded-lg border bg-white p-5"><h2 className="mb-3 font-semibold">Daily reflection</h2><ReflectionForm note={reflection?.note ?? ''} /></section>
+        <Link href="/review" className="block text-sm underline">See your weekly review →</Link>
+      </aside>
+    </div>
+  </main>;
+}

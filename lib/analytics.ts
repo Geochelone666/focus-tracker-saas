@@ -21,8 +21,9 @@ function validTimeZone(timeZone: string): string {
   }
 }
 
-export function getDateKey(date: Date) {
-  const parts = analyticsDateFormatter.formatToParts(date);
+export function getDateKey(date: Date, timeZone = ANALYTICS_TIME_ZONE) {
+  const formatter = timeZone === ANALYTICS_TIME_ZONE ? analyticsDateFormatter : new Intl.DateTimeFormat('en-CA', { timeZone: validTimeZone(timeZone), year: 'numeric', month: '2-digit', day: '2-digit' });
+  const parts = formatter.formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value;
   const month = parts.find((part) => part.type === "month")?.value;
   const day = parts.find((part) => part.type === "day")?.value;
@@ -91,8 +92,8 @@ export function formatDuration(totalSeconds: number | null) {
   return `${minutes}m`;
 }
 
-export function buildAnalyticsDays(now: Date): Array<{ date: Date; key: string; label: string }> {
-  const todayKey = getDateKey(now);
+export function buildAnalyticsDays(now: Date, timeZone = ANALYTICS_TIME_ZONE): Array<{ date: Date; key: string; label: string }> {
+  const todayKey = getDateKey(now, timeZone);
   const [year, month, day] = todayKey.split("-").map(Number);
   const today = new Date(Date.UTC(year, month - 1, day));
   return Array.from({ length: 7 }, (_, index) => {
@@ -112,10 +113,10 @@ export function buildAnalyticsDays(now: Date): Array<{ date: Date; key: string; 
   });
 }
 
-export function groupSecondsByDay(sessions: SessionDurationRow[], dayKeys: string[]): Map<string, number> {
+export function groupSecondsByDay(sessions: SessionDurationRow[], dayKeys: string[], timeZone = ANALYTICS_TIME_ZONE): Map<string, number> {
   const secondsByDay = new Map(dayKeys.map((key) => [key, 0]));
   sessions.forEach((session) => {
-    const dateKey = getDateKey(new Date(session.started_at));
+    const dateKey = getDateKey(new Date(session.started_at), timeZone);
     secondsByDay.set(dateKey, (secondsByDay.get(dateKey) ?? 0) + (session.duration_sec ?? 0));
   });
   return secondsByDay;

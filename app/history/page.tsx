@@ -1,15 +1,10 @@
 import Link from "next/link";
+import { timezone as normalizeTimezone } from "@/lib/planning";
 import { redirect } from "next/navigation";
 import { formatDuration } from "@/lib/analytics";
 import { createClient } from "@/supabase/server";
 
 const PAGE_SIZE = 20;
-const dateFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Toronto",
-  dateStyle: "medium",
-  timeStyle: "short"
-});
-
 export default async function HistoryPage({
   searchParams: searchParamsPromise
 }: {
@@ -24,6 +19,11 @@ export default async function HistoryPage({
   if (!user) {
     redirect("/login");
   }
+
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('timezone').eq('user_id',user.id).maybeSingle();
+  if (profileError) throw profileError;
+  const timezone = normalizeTimezone(profile?.timezone);
+  const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, dateStyle:'medium', timeStyle:'short' });
 
   const requestedPage = typeof searchParams.page === "string" ? Number(searchParams.page) : 1;
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
@@ -52,7 +52,7 @@ export default async function HistoryPage({
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
       <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Session History</h1>
-      <p className="mb-6 text-slate-600">Your focus sessions. Times are shown in America/Toronto.</p>
+      <p className="mb-6 text-slate-600">Your focus sessions. Times are shown in {timezone}.</p>
 
       <a
         href="/history/export"

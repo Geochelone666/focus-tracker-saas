@@ -1,5 +1,6 @@
+import { timezone as normalizeTimezone } from "@/lib/planning";
 import { readAllRows } from "@/lib/paginated-query";
-import { buildAnalyticsDays, buildSkillStats, formatDuration, getTorontoMidnight } from "@/lib/analytics";
+import { buildAnalyticsDays, buildSkillStats, formatDuration, getMidnightInTimeZone } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { addSkill, deleteSkill, toggleSkill } from "@/app/skills/actions";
 import { createClient } from "@/supabase/server";
@@ -40,7 +41,10 @@ export default async function SkillsPage({
     .eq("user_id", user.id)
     .order("id")
     .range(from, to));
-  const weekStart = getTorontoMidnight(buildAnalyticsDays(new Date())[0].date);
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('timezone').eq('user_id',user.id).maybeSingle();
+  if (profileError) throw profileError;
+  const timezone = normalizeTimezone(profile?.timezone);
+  const weekStart = getMidnightInTimeZone(buildAnalyticsDays(new Date(), timezone)[0].date, timezone);
   const stats = buildSkillStats(sessions ?? [], weekStart);
   const maxTotalSec = Math.max(0, ...typedSkills.map((skill) => stats.get(skill.id)?.totalSec ?? 0));
 

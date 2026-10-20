@@ -18,16 +18,16 @@ describe('authentication', () => {
     mocks.signUp.mockResolvedValue({ data: { session: null }, error: null });
   });
   it('preserves password whitespace while trimming the email', async () => {
-    await expect(login(form())).rejects.toThrow('Redirect: /dashboard');
+    await expect(login(form())).rejects.toThrow('Redirect: /today');
     expect(mocks.signIn).toHaveBeenCalledWith({ email: 'person@example.com', password: ' secret password ' });
   });
   it('explains email confirmation when signup has no session', async () => {
     await expect(signup(form())).rejects.toThrow('Redirect: /login?message=' + encodeURIComponent('Check your email to confirm your account, then log in.'));
     expect(mocks.revalidate).not.toHaveBeenCalled();
   });
-  it('opens the dashboard for a signup with an active session', async () => {
+  it('opens Today for a signup with an active session', async () => {
     mocks.signUp.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null });
-    await expect(signup(form())).rejects.toThrow('Redirect: /dashboard');
+    await expect(signup(form())).rejects.toThrow('Redirect: /today');
   });
   it('rejects empty credentials', async () => {
     await expect(login(new FormData())).rejects.toThrow('Redirect: /login?message=');

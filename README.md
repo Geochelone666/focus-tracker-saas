@@ -1,6 +1,6 @@
 # Focus Tracker
 
-A personal focus and planning app built with Next.js 15, React 18, TypeScript, Tailwind CSS, and Supabase authentication and PostgreSQL.
+A personal focus and planning app built with Next.js 15, React 19, TypeScript, Tailwind CSS, and Supabase authentication and PostgreSQL.
 
 ## Features
 
@@ -8,7 +8,11 @@ A personal focus and planning app built with Next.js 15, React 18, TypeScript, T
 - Protected dashboard with focus sessions, running timer, stale-session recovery, daily goals, and seven-day statistics.
 - Personal skill checklist with per-skill focus totals.
 - Paginated session history and CSV export.
-- Monthly calendar with date selection, all-day or timed schedules, optional notes, completion and undo, completion counts, and All / Open / Completed filters.
+- Today workspace, Inbox capture, searchable task views, reversible Trash, and monthly calendar.
+- Priority, time estimates, energy filters, project/skill links, and bounded daily/weekly repeats with future-occurrence edits.
+- Projects and goals, task-linked focus sessions, daily reflections, and weekly review.
+- In-app reminders and optional browser notifications while Today is open.
+- Account timezone settings, light/dark theme, and a home-screen web manifest.
 - Edit schedule details or move a schedule to another date using **Edit or reschedule**.
 - English interface, responsive layouts, accessible labels, and pending feedback on schedule saves.
 
@@ -23,7 +27,7 @@ cp .env.example .env.local
 
 Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for your Supabase project in `.env.local`. Do not commit credentials or use a service role key in the browser. Existing local configuration should be preserved.
 
-Apply the SQL migrations in `supabase/migrations/` using the project's migration workflow; see [migration instructions](supabase/migrations/README.md). Existing deployments upgrading to calendar support need `008_create_schedules.sql` applied once. Editing, rescheduling, and filtering use that same table and need no further migration. Row-level security restricts data to the authenticated owner.
+Apply the SQL migrations in `supabase/migrations/` using the project's migration workflow; see [migration instructions](supabase/migrations/README.md). Existing deployments upgrading to calendar support need `008_create_schedules.sql` applied once. The expanded planning workflow additionally requires `009_planning_workflow.sql` before deploying the application update. See [upgrade instructions and feature details](docs/planning-workflow.md). Row-level security restricts data to the authenticated owner.
 
 ```bash
 npm run dev
@@ -40,11 +44,11 @@ npm run lint
 npm run build
 ```
 
-Unit tests cover validation, analytics, pagination, session concurrency, authentication actions, schedule creation and edits, and ownership filters. They do not replace live Supabase authentication or database policy verification. The SQL ownership regression check is in `supabase/tests/session_skill_ownership.sql`.
+Unit tests cover validation, analytics, pagination, session concurrency, authentication actions, schedule creation and edits, recurrence, inbox capture, timezone boundaries, reminders, task-linked focus, soft deletion, and ownership filters. They do not replace live Supabase authentication or database policy verification. The SQL ownership regression check is in `supabase/tests/session_skill_ownership.sql`.
 
 ## Dates and time
 
-Dashboard statistics and session history use America/Toronto. Calendar dates and optional times are stored as entered, without UTC conversion; calendar **Today** uses America/Toronto. Schedules without a time display **All day**. Completed schedules remain available and can be reopened.
+Daily statistics, Today, reminders, and displayed session history use the timezone saved in Settings (America/Toronto by default). Calendar dates and optional times are stored as entered, without UTC conversion. CSV export uses UTC timestamps. Schedules without a time display **All day**. Completed schedules remain available and can be reopened.
 
 ## Deployment
 
