@@ -24,6 +24,9 @@ export async function Header() {
             <Link href="/skills" className="text-sm font-medium text-slate-900 underline underline-offset-4">
               Skills
             </Link>
+            <Link href="/calendar" className="text-sm font-medium text-slate-900 underline underline-offset-4">
+              日程日历
+            </Link>
             <Link href="/history" className="text-sm font-medium text-slate-900 underline underline-offset-4">
               History
             </Link>

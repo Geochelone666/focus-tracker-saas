@@ -138,3 +138,9 @@ The dashboard uses the authenticated SSR user session (no service role key) to c
 The protected `/skills` page provides a personal checklist where authenticated users can add, complete, and delete skills.
 
 Before using the page, apply both `db/schema.sql` and `db/rls.sql` in your Supabase project. These scripts create the `skills` table and enable per-user row-level security policies so users can only access their own checklist items.
+
+## 日程与日历
+
+登录后点击导航中的“日程日历”进入 `/calendar`。日程名称和日期必填，时间和备注可选；点击月历日期查看当天日程或为该日期新增日程，支持上月、下月和回到今天。点击勾选框标记完成，再次点击可取消完成，完成记录保留。未指定时间的日程显示为“全天”。
+
+使用前，在 Supabase SQL Editor 中执行 `supabase/migrations/008_create_schedules.sql`（或通过项目现有迁移流程应用）。日程通过 RLS 隔离到当前登录用户；无需 service role key。日期按用户选择的日历日期保存，不做 UTC 位移，“今天”沿用项目的 America/Toronto 时区。
