@@ -25,7 +25,7 @@ export async function Header() {
               Skills
             </Link>
             <Link href="/calendar" className="text-sm font-medium text-slate-900 underline underline-offset-4">
-              日程日历
+              Calendar
             </Link>
             <Link href="/history" className="text-sm font-medium text-slate-900 underline underline-offset-4">
               History

@@ -2,19 +2,20 @@ import Link from "next/link";
 import { login, signup } from "./actions";
 
 type LoginPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     message?: string;
-  };
+  }>;
 };
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
+export default async function LoginPage({ searchParams: searchParamsPromise }: LoginPageProps) {
+  const searchParams = await searchParamsPromise;
   return (
     <main className="mx-auto flex min-h-[calc(100vh-73px)] w-full max-w-md flex-col justify-center px-6 py-16">
       <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Welcome back</h1>
       <p className="mb-8 text-sm text-slate-600">Log in or create an account with your email.</p>
 
       {searchParams?.message ? (
-        <p className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <p role="status" className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           {searchParams.message}
         </p>
       ) : null}

@@ -4,11 +4,12 @@ export async function readAllRows<T>(
 ): Promise<T[]> {
   const pageSize = 1000;
   const rows: T[] = [];
-  for (let from = 0; ; from += pageSize) {
+  for (let from = 0; ;) {
     const { data, error } = await fetchPage(from, from + pageSize - 1);
     if (error) throw error;
     const page = data ?? [];
     rows.push(...page);
-    if (page.length < pageSize) return rows;
+    if (page.length === 0) return rows;
+    from += page.length;
   }
 }

@@ -4,7 +4,7 @@ import { Header } from "@/components/header";
 
 export const metadata: Metadata = {
   title: "Focus Tracker SaaS",
-  description: "A clean starting point for a focus-tracking SaaS app."
+  description: "Plan your day, track focus sessions, and build your skills."
 };
 
 type RootLayoutProps = {

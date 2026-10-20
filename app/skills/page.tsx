@@ -11,10 +11,11 @@ type SkillRow = {
 };
 
 export default async function SkillsPage({
-  searchParams
+  searchParams: searchParamsPromise
 }: {
-  searchParams: { error?: string | string[] };
+  searchParams: Promise<{ error?: string | string[] }>;
 }) {
+  const searchParams = await searchParamsPromise;
   const error = typeof searchParams.error === "string" ? searchParams.error : undefined;
   const supabase = await createClient();
   const {

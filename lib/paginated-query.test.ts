@@ -13,6 +13,12 @@ describe("complete statistics", () => {
       .toMatchObject({ totalSec: count * 60, sessionCount: count, weekSec: count * 60 });
   });
 
+  it("continues when the database caps pages below the requested size", async () => {
+    const data = Array.from({ length: 1100 }, (_, id) => ({ id }));
+    const rows = await readAllRows(async (from, to) => ({ data: data.slice(from, Math.min(to + 1, from + 250)), error: null }));
+    expect(rows).toEqual(data);
+  });
+
   it("fails instead of displaying a partial total when a later page fails", async () => {
     const failure = { message: "Database unavailable" };
     const fetchPage = vi.fn().mockResolvedValueOnce({ data: Array(1000).fill({ duration_sec: 60 }), error: null })

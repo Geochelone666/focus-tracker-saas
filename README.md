@@ -1,146 +1,55 @@
-# Focus Tracker SaaS
+# Focus Tracker
 
-[![CI](https://github.com/Geochelone666/focus-tracker-saas/actions/workflows/ci.yml/badge.svg)](https://github.com/Geochelone666/focus-tracker-saas/actions/workflows/ci.yml)
+A personal focus and planning app built with Next.js 15, React 18, TypeScript, Tailwind CSS, and Supabase authentication and PostgreSQL.
 
-A full-stack **Next.js (App Router)** starter with **Tailwind CSS** and **Supabase authentication**.
-A clean, production-ready starter for a full-stack **Next.js (App Router)** application with **Tailwind CSS** and **Supabase client scaffolding**.
+## Features
 
-## Tech Stack
+- Email/password signup and login, including email confirmation guidance.
+- Protected dashboard with focus sessions, running timer, stale-session recovery, daily goals, and seven-day statistics.
+- Personal skill checklist with per-skill focus totals.
+- Paginated session history and CSV export.
+- Monthly calendar with date selection, all-day or timed schedules, optional notes, completion and undo, completion counts, and All / Open / Completed filters.
+- Edit schedule details or move a schedule to another date using **Edit or reschedule**.
+- English interface, responsive layouts, accessible labels, and pending feedback on schedule saves.
 
-- Next.js 14 (App Router)
-- TypeScript
-- Tailwind CSS
-- Supabase (`@supabase/ssr` + `@supabase/supabase-js`)
-- Supabase JavaScript client
+## Local development
 
-## Project Structure
+Use Node.js 20.19 or newer (production uses Node.js 24) and npm.
 
-```text
-.
-├── app/
-│   ├── actions/
-│   │   └── auth.ts
-│   ├── dashboard/
-│   │   └── page.tsx
-│   ├── login/
-│   │   ├── actions.ts
-│   │   └── page.tsx
-│   ├── globals.css
-│   ├── layout.tsx
-│   └── page.tsx
-├── components/
-│   └── header.tsx
-├── lib/
-│   └── env.ts
-├── supabase/
-│   ├── client.ts
-│   ├── middleware.ts
-│   └── server.ts
-├── middleware.ts
-└── .env.example
+```bash
+npm ci
+cp .env.example .env.local
 ```
 
-## Environment Setup
-│   └── login-button.tsx
-├── lib/
-│   └── env.ts
-├── supabase/
-│   └── client.ts
-├── .env.example
-├── next.config.mjs
-├── postcss.config.mjs
-├── tailwind.config.ts
-└── tsconfig.json
-```
+Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for your Supabase project in `.env.local`. Do not commit credentials or use a service role key in the browser. Existing local configuration should be preserved.
 
-## Getting Started
-
-1. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-2. Create local env file:
-2. Create your environment file:
-
-   ```bash
-   cp .env.example .env.local
-   ```
-
-3. Provide Supabase project values:
-3. Add your Supabase credentials to `.env.local`:
-
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your-project-url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   ```
-
-## Run Locally
+Apply the SQL migrations in `supabase/migrations/` using the project's migration workflow; see [migration instructions](supabase/migrations/README.md). Existing deployments upgrading to calendar support need `008_create_schedules.sql` applied once. Editing, rescheduling, and filtering use that same table and need no further migration. Row-level security restricts data to the authenticated owner.
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Visit the local server on port 3000. For cloud development, use `npm run dev -- --hostname 0.0.0.0`. If the default npm cache is not writable, install with `npm ci --cache /workspace/.npm-cache`.
 
-## Authentication Flow
+## Validation
 
-- `/login` supports both email/password **login** and **signup**.
-- Session persistence is handled using Supabase auth helpers and Next.js middleware.
-- Header displays the authenticated user email and a logout button.
-- `/dashboard` is protected and redirects to `/login` when unauthenticated.
-4. Run the development server:
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
 
-   ```bash
-   npm run dev
-   ```
+Unit tests cover validation, analytics, pagination, session concurrency, authentication actions, schedule creation and edits, and ownership filters. They do not replace live Supabase authentication or database policy verification. The SQL ownership regression check is in `supabase/tests/session_skill_ownership.sql`.
 
-5. Open [http://localhost:3000](http://localhost:3000).
+## Dates and time
 
-## Notes
+Dashboard statistics and session history use America/Toronto. Calendar dates and optional times are stored as entered, without UTC conversion; calendar **Today** uses America/Toronto. Schedules without a time display **All day**. Completed schedules remain available and can be reopened.
 
-- Authentication and database features are intentionally not implemented yet.
-- The Supabase client uses environment variables only (no hardcoded keys).
-- The homepage includes a non-functional **Login** button for future wiring.
+## Deployment
 
-## CI
+Push to `main` to trigger the connected Vercel deployment. Configure the Supabase environment variables in Vercel and apply database migrations to the matching Supabase project before using database features. Verify the deployment is Ready and test login, schedule creation, edit/reschedule, completion and undo, and persistence after refresh with a test account.
 
-GitHub Actions CI runs the following checks on every pull request and on pushes to `main`:
+Dependency versions are locked. Next.js and its ESLint configuration are aligned, with patched PostCSS and source-map-js overrides. Check `npm audit --omit=dev` periodically; an audit result describes known advisories at the time of the check, not a guarantee against all vulnerabilities.
 
-- Install dependencies (`npm install --no-audit --no-fund`)
-- Lint (`npm run lint`)
-- Type check (`npm run typecheck`)
-- Production build (`npm run build`)
-
-
-> Temporary note: CI currently uses `npm install --no-audit --no-fund` because the committed `package-lock.json` is not fully populated/synced for reliable `npm ci` in clean environments. After regenerating and committing a complete lockfile, switch CI back to `npm ci`.
-
-> CI sets placeholder Supabase environment values (`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`) so build validation can run in GitHub Actions. For real deployments, configure actual values in Vercel project environment settings.
-
-To view results, open the **Actions** tab in GitHub and inspect the latest **CI** workflow run for your branch/PR.
-
-
-## Focus Sessions
-
-This project includes a Focus Sessions MVP backed by a `focus_sessions` table in Supabase.
-
-To enable it in your Supabase project:
-
-1. Open the Supabase SQL Editor.
-2. Run `db/schema.sql` to create the table and indexes.
-3. Run `db/rls.sql` to enable RLS and apply per-user CRUD policies.
-
-The dashboard uses the authenticated SSR user session (no service role key) to create, stop, and read each user's own focus sessions.
-
-## Skills
-
-The protected `/skills` page provides a personal checklist where authenticated users can add, complete, and delete skills.
-
-Before using the page, apply both `db/schema.sql` and `db/rls.sql` in your Supabase project. These scripts create the `skills` table and enable per-user row-level security policies so users can only access their own checklist items.
-
-## 日程与日历
-
-登录后点击导航中的“日程日历”进入 `/calendar`。日程名称和日期必填，时间和备注可选；点击月历日期查看当天日程或为该日期新增日程，支持上月、下月和回到今天。点击勾选框标记完成，再次点击可取消完成，完成记录保留。未指定时间的日程显示为“全天”。
-
-使用前，在 Supabase SQL Editor 中执行 `supabase/migrations/008_create_schedules.sql`（或通过项目现有迁移流程应用）。日程通过 RLS 隔离到当前登录用户；无需 service role key。日期按用户选择的日历日期保存，不做 UTC 位移，“今天”沿用项目的 America/Toronto 时区。
+The current full development-dependency audit still reports seven high-severity entries through braces (the registry currently has no patched release). Production dependency audit reports zero known advisories. Avoid processing untrusted glob patterns in development tools, and recheck for upstream fixes. Vitest is updated to 4.1.12.

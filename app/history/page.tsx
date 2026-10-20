@@ -11,10 +11,11 @@ const dateFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 export default async function HistoryPage({
-  searchParams
+  searchParams: searchParamsPromise
 }: {
-  searchParams: { page?: string | string[] };
+  searchParams: Promise<{ page?: string | string[] }>;
 }) {
+  const searchParams = await searchParamsPromise;
   const supabase = await createClient();
   const {
     data: { user }
@@ -43,6 +44,7 @@ export default async function HistoryPage({
         .select("id, started_at, ended_at, note")
         .eq("user_id", user.id)
         .order("started_at", { ascending: false })
+        .order("id", { ascending: false })
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   const error = countError || sessionsError;
   const now = Date.now();

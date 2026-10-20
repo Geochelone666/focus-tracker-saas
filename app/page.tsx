@@ -8,7 +8,7 @@ export default function HomePage() {
         Stay focused and make progress every day.
       </h1>
       <p className="mb-8 max-w-xl text-base text-slate-600 sm:text-lg">
-        Build habits, track sessions, and grow your focus with a clean Next.js + Supabase foundation.
+        Plan your schedule, track focused work, and build skills one day at a time.
       </p>
       <Link
         href="/login"
