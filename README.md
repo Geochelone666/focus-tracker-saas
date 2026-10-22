@@ -41,6 +41,15 @@ npm run dev
 
 Visit the local server on port 3000. For cloud development, use `npm run dev -- --hostname 0.0.0.0`. If the default npm cache is not writable, install with `npm ci --cache /workspace/.npm-cache`.
 
+### Environment variables
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL; the app and middleware throw at startup without it |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon/publishable key (never the service role key) |
+
+CI builds with the placeholder values `https://example.supabase.co` / `example-anon-key`. See [CHANGELOG](CHANGELOG.md) for recent changes.
+
 ## Validation
 
 ```bash
