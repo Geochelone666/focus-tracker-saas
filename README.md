@@ -16,6 +16,12 @@ A personal focus and planning app built with Next.js 15, React 19, TypeScript, T
 - Edit schedule details or move a schedule to another date using **Edit or reschedule**.
 - English interface, responsive layouts, accessible labels, and pending feedback on schedule saves.
 
+## Project status
+
+The original MVP scope has expanded into the planning workflow described above. Authentication, focus sessions, analytics, skill tracking, and automated regression tests are implemented in the repository. The stack is Next.js 15 and React 19; older descriptions referring to Next.js 14 or planned tests describe an earlier version.
+
+Deployment acceptance still requires a matching Supabase project with migrations applied and live checks of authentication, ownership policies, and persistence. Passing unit tests or CI alone does not establish those deployment checks. See the deployment section below and [planning workflow](docs/planning-workflow.md).
+
 ## Local development
 
 Use Node.js 20.19 or newer (production uses Node.js 24) and npm.
