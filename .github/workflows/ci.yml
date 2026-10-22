@@ -48,3 +48,39 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  e2e:
+    needs: ci
+    runs-on: ubuntu-latest
+    env:
+      # Unreachable on purpose: the auth-guard check needs no real project.
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Auth guard end-to-end
+        run: |
+          npm start -- -p 3000 > server.log 2>&1 &
+          for i in $(seq 60); do curl -sf -o /dev/null http://localhost:3000 && break; sleep 1; done
+          BASE_URL=http://localhost:3000 npm run test:e2e
+
+      - name: Server log on failure
+        if: failure()
+        run: tail -100 server.log

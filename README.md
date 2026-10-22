@@ -61,6 +61,16 @@ npm run build
 
 Unit tests cover validation, analytics, pagination, session concurrency, authentication actions, schedule creation and edits, recurrence, inbox capture, timezone boundaries, reminders, task-linked focus, soft deletion, and ownership filters. They do not replace live Supabase authentication or database policy verification. The SQL regression checks in `supabase/tests/` run automatically: `lib/migrations.test.ts` applies every migration in file-name order to an in-memory PGlite database and executes them. You can also run them in the Supabase SQL Editor against a real project.
 
+A browser end-to-end check (`scripts/e2e-auth.mjs`, Playwright) covers the auth guard without a real Supabase project: every protected page and `/history/export` redirects to `/login` when signed out, a forged session cookie is rejected, and a login attempt while Supabase is unreachable shows a readable message. Build and start against an unreachable Supabase, then run it:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:9 NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy npm run build
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:9 NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy npm start
+BASE_URL=http://localhost:3000 npm run test:e2e   # in another terminal
+```
+
+The first run needs `npx playwright install chromium`, or set `PLAYWRIGHT_CHROMIUM_PATH` to an existing Chromium. CI runs it after the main job.
+
 ## Dates and time
 
 Daily statistics, Today, reminders, and displayed session history use the timezone saved in Settings (America/Toronto by default). Calendar dates and optional times are stored as entered, without UTC conversion. CSV export uses UTC timestamps. Schedules without a time display **All day**. Completed schedules remain available and can be reopened.

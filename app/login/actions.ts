@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
+import { authErrorMessage } from "@/lib/auth-errors";
 
 function readCredential(formData: FormData, key: "email" | "password") {
   const value = formData.get(key);
@@ -35,7 +36,7 @@ export async function login(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?message=${encodeURIComponent(error.message)}`);
+    redirect(`/login?message=${encodeURIComponent(authErrorMessage(error))}`);
   }
 
   revalidatePath("/", "layout");
@@ -52,7 +53,7 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?message=${encodeURIComponent(error.message)}`);
+    redirect(`/login?message=${encodeURIComponent(authErrorMessage(error))}`);
   }
 
   if (!data.session) {

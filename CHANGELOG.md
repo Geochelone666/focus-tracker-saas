@@ -6,4 +6,6 @@
 - Day boundaries: "today", the seven-day chart, skill week totals and the weekly review are now correct in time zones where DST skips or repeats midnight (for example Asia/Beirut and America/Havana).
 - CSV export: notes beginning with `=`, `+`, `-`, `@` or a tab get an apostrophe prefix, so spreadsheet apps do not run them as formulas.
 - Calendar: toggling a schedule now sets and clears `completed_at` together with `is_done`.
-- Tests: 205 → 264. `npm test` now applies every migration to PGlite and runs `supabase/tests/*.sql`, and there are new tests for skill actions and for time zones.
+- Login and signup: when Supabase can't be reached, the page now says "Couldn't reach the sign-in service…" instead of the raw "fetch failed".
+- Browser end-to-end check of the auth guard (`npm run test:e2e`), run in CI without secrets.
+- Tests: 205 → 266. `npm test` now applies every migration to PGlite and runs `supabase/tests/*.sql`, and there are new tests for skill actions and for time zones.
