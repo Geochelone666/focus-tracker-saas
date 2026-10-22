@@ -29,4 +29,14 @@ describe("buildSessionCsv", () => {
       started_at: "2026-09-29T13:00:00Z", ended_at: null, note: ""
     }], 0)).toContain('"0","active",""');
   });
+
+  it.each(["=HYPERLINK(\"http://x\")", "+1+1", "-2+3", "@SUM(A1)", "\tTab"])("neutralizes formula-like note %j", (note) => {
+    const csv = buildSessionCsv([{ started_at: "2026-09-29T13:00:00Z", ended_at: "2026-09-29T13:00:00Z", note }]);
+    expect(csv.split("\r\n")[1].endsWith(`"'${note.replace(/"/g, '""')}"`)).toBe(true);
+  });
+
+  it("leaves ordinary notes unchanged", () => {
+    expect(buildSessionCsv([{ started_at: "2026-09-29T13:00:00Z", ended_at: "2026-09-29T13:00:00Z", note: "Deep work - 2h" }]))
+      .toContain('"Deep work - 2h"');
+  });
 });

@@ -4,8 +4,16 @@ export type CsvSession = {
   note: string | null;
 };
 
+// Spreadsheet apps evaluate cells starting with these characters as formulas
+// (OWASP "CSV injection"); prefix free text with an apostrophe so it stays text.
+const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+
 function escapeField(value: string | number): string {
   return `"${String(value).replace(/"/g, '""')}"`;
+}
+
+function textCell(value: string): string {
+  return FORMULA_PREFIX.test(value) ? `'${value}` : value;
 }
 
 export function buildSessionCsv(sessions: CsvSession[], now = Date.now()): string {
@@ -21,7 +29,7 @@ export function buildSessionCsv(sessions: CsvSession[], now = Date.now()): strin
       end?.toISOString() ?? "",
       Math.max(0, Math.floor(((end?.getTime() ?? now) - start.getTime()) / 1000)),
       end === null ? "active" : "ended",
-      session.note ?? ""
+      textCell(session.note ?? "")
     ]);
   }
 
