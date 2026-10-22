@@ -31,27 +31,28 @@ export function getDateKey(date: Date, timeZone = ANALYTICS_TIME_ZONE) {
   return `${year}-${month}-${day}`;
 }
 
-/** Interpret the UTC calendar fields of date as a local calendar date. */
+/**
+ * Interpret the UTC calendar fields of date as a local calendar date and return
+ * the first instant of that day in timeZone. Where DST skips midnight (e.g.
+ * Asia/Beirut, America/Havana) the day starts at the transition; where midnight
+ * repeats, the earlier occurrence is used.
+ */
 export function getMidnightInTimeZone(date: Date, timeZone: string): Date {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: validTimeZone(timeZone),
-    timeZoneName: "longOffset"
-  });
-  const utcMidnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-  let midnight = utcMidnight;
-  // Re-evaluate at the candidate instant: its offset can differ from UTC midnight.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const offset = formatter.formatToParts(new Date(midnight))
-      .find((part) => part.type === "timeZoneName")?.value;
+  const zone = validTimeZone(timeZone);
+  const formatter = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" });
+  const offsetMinutes = (instant: number) => {
+    const offset = formatter.formatToParts(new Date(instant)).find((part) => part.type === "timeZoneName")?.value;
     const match = offset?.match(/GMT([+-])(\d{2}):(\d{2})/);
-    const minutes = match
-      ? (match[1] === "+" ? 1 : -1) * (Number(match[2]) * 60 + Number(match[3]))
-      : 0;
-    const candidate = utcMidnight - minutes * 60 * 1000;
-    if (candidate === midnight) break;
-    midnight = candidate;
-  }
-  return new Date(midnight);
+    return match ? (match[1] === "+" ? 1 : -1) * (Number(match[2]) * 60 + Number(match[3])) : 0;
+  };
+  const utcMidnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const target = new Date(utcMidnight).toISOString().slice(0, 10);
+  // Every offset in effect near this day yields a candidate start; real offsets span -12h..+14h.
+  const candidates = [...new Set([-14, 0, 14].map((hours) => offsetMinutes(utcMidnight + hours * 3_600_000)))]
+    .map((minutes) => utcMidnight - minutes * 60_000)
+    .filter((candidate) => getDateKey(new Date(candidate), zone) === target)
+    .sort((a, b) => a - b);
+  return new Date(candidates[0] ?? utcMidnight - offsetMinutes(utcMidnight) * 60_000);
 }
 
 export function getTorontoMidnight(date: Date): Date {
