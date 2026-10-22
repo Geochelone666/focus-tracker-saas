@@ -3,6 +3,7 @@ import { planningContext, planningData } from '@/lib/planning-data';
 import { addDays, dayKey } from '@/lib/planning';
 import { getMidnightInTimeZone } from '@/lib/analytics';
 import { readAllRows } from '@/lib/paginated-query';
+import { projectFocusMinutes } from '@/lib/review-projects';
 
 export default async function ReviewPage() {
   const context = await planningContext();
@@ -21,13 +22,9 @@ export default async function ReviewPage() {
   const plans = schedules.filter(s => !s.deleted_at && s.scheduled_date && s.scheduled_date >= first && s.scheduled_date <= today);
   const done = plans.filter(s => s.is_done).length;
   const deferred = plans.filter(s => s.deferral_reason);
-  const byProject = new Map<string,number>();
-  for (const session of sessions) {
-    if (dayKey(new Date(session.started_at),zone) < first) continue;
-    const projectId = schedules.find(s => s.id === session.schedule_id)?.project_id;
-    const name = projects.find(p => p.id === projectId)?.name ?? 'Unassigned';
-    byProject.set(name,(byProject.get(name)??0)+(session.duration_sec??0)/60);
-  }
+  const byProject = projectFocusMinutes(
+    sessions.filter(session => dayKey(new Date(session.started_at), zone) >= first), schedules, projects
+  );
   return <main className="mx-auto max-w-4xl px-4 py-10">
     <h1 className="text-3xl font-bold">Weekly Review</h1><p className="mt-2 mb-6 text-slate-600">{first} – {today} · {zone}. A little reflection helps you plan with more room.</p>
     <div className="grid gap-4 sm:grid-cols-3">
@@ -39,7 +36,7 @@ export default async function ReviewPage() {
       <div className="space-y-3">{days.map((date,i) => <div key={date}><div className="mb-1 flex justify-between text-sm"><span>{date}</span><span>{Math.floor(minutes[i])}m</span></div><div role="img" aria-label={`${date}: ${Math.floor(minutes[i])} minutes focused`} className="h-3 rounded bg-slate-100"><div className="h-3 rounded bg-slate-900" style={{width:`${minutes[i]/Math.max(1,...minutes)*100}%`}} /></div></div>)}</div>
     </section>
     <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Time by project</h2>
-      {byProject.size === 0 ? <p className="text-slate-500">Start focus from a task to see where your time goes.</p> : <ul>{[...byProject].sort((a,b)=>b[1]-a[1]).map(([name,n])=><li key={name} className="flex justify-between gap-3 py-2"><span className="break-words">{name}</span><span>{Math.floor(n)}m</span></li>)}</ul>}
+      {byProject.length === 0 ? <p className="text-slate-500">Start focus from a task to see where your time goes.</p> : <ul>{byProject.map(project=><li key={project.id ?? 'unassigned'} className="flex justify-between gap-3 py-2"><span className="break-words">{project.name}</span><span>{Math.floor(project.minutes)}m</span></li>)}</ul>}
     </section>
     {deferred.length > 0 && <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Plans you adjusted</h2><ul className="space-y-2">{deferred.map(plan=><li key={plan.id} className="break-words text-sm">{plan.title}: {plan.deferral_reason}</li>)}</ul></section>}
     <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Daily reflections</h2>
