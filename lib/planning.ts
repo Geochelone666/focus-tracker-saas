@@ -65,14 +65,17 @@ export function plannedMinutes(items: Schedule[], buffer = 0) {
 
 export type Reminder = { id: string; title: string; scheduled_date: string | null; scheduled_time: string | null };
 export function dueSoon(items: Reminder[], now: Date, zone: string) {
-  const today = dayKey(now, zone);
-  const tomorrow = addDays(today, 1);
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: timezone(zone), hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
-  const minutes = Number(parts.find(p => p.type === 'hour')?.value) * 60 + Number(parts.find(p => p.type === 'minute')?.value);
-  return items.filter(item => {
-    if (!item.scheduled_time || !item.scheduled_date || ![today,tomorrow].includes(item.scheduled_date)) return false;
-    const [hours, mins] = item.scheduled_time.split(':').map(Number);
-    const delta = hours * 60 + mins + (item.scheduled_date === tomorrow ? 1440 : 0) - minutes;
-    return delta >= 0 && delta <= 10;
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone(zone), year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   });
+  // Plans have minute precision. Advance actual instants so a DST jump cannot
+  // invent a nonexistent minute or hide an upcoming repeated wall-clock time.
+  const upcoming = new Set(Array.from({ length: 11 }, (_, minute) => {
+    const parts = formatter.formatToParts(new Date(now.getTime() + minute * 60_000));
+    const part = (type: string) => parts.find(value => value.type === type)!.value;
+    return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
+  }));
+  return items.filter(item => item.scheduled_date && item.scheduled_time &&
+    upcoming.has(`${item.scheduled_date}T${item.scheduled_time.slice(0, 5)}`));
 }

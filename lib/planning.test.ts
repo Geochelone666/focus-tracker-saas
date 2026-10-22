@@ -35,4 +35,16 @@ describe('timezone-aware planning', () => {
     const items=[{id:'a',title:'Soon',scheduled_date:'2026-10-20',scheduled_time:'09:10:00'},{id:'b',title:'Later',scheduled_date:'2026-10-20',scheduled_time:'09:11:00'},{id:'c',title:'Untimed',scheduled_date:'2026-10-20',scheduled_time:null}];
     expect(dueSoon(items,new Date('2026-10-20T13:00:00Z'),'America/Toronto').map(p=>p.id)).toEqual(['a']);
   });
+  it.each([
+    ['2026-03-08T06:55:00Z', '2026-03-08', '03:00:00'],
+    ['2026-11-01T05:55:00Z', '2026-11-01', '01:00:00'],
+    ['2026-10-21T03:55:00Z', '2026-10-21', '00:00:00'],
+  ])('finds reminders across offset and date changes at %s', (instant, date, time) => {
+    const items = [{ id: 'soon', title: 'Soon', scheduled_date: date, scheduled_time: time }];
+    expect(dueSoon(items, new Date(instant), 'America/Toronto').map(p => p.id)).toEqual(['soon']);
+  });
+  it('does not remind for a nonexistent spring-forward wall time', () => {
+    const items = [{ id: 'gap', title: 'Invalid time', scheduled_date: '2026-03-08', scheduled_time: '02:00:00' }];
+    expect(dueSoon(items, new Date('2026-03-08T06:55:00Z'), 'America/Toronto')).toEqual([]);
+  });
 });

@@ -24,6 +24,8 @@
 
 Today checks timed plans every 30 seconds and shows items due within ten minutes. Desktop notifications are optional and require the user's permission. They work only while Today remains open, and browser throttling can delay them. No email, push server, service worker, or closed-browser alarms are configured. All-day tasks do not trigger notifications. Dates and times are interpreted in the user's saved timezone; an invalid/nonexistent DST wall time should be rescheduled by the user.
 
+The reminder window follows elapsed minutes across daylight-saving changes. Spring-forward times that never occur do not trigger reminders; times after the jump can still be due within ten minutes. During fall-back, a repeated wall time can appear in either occurrence's reminder window. Browser notifications remain limited to once per plan/date/time per tab session.
+
 ## Safety and data semantics
 
 Every query and mutation is scoped to the authenticated owner. Database policies additionally enforce owner checks for linked projects, skills, and schedules. Series edits use a transaction inside a SECURITY INVOKER function, preserving RLS and preventing partial series updates. Trash is a reversible soft deletion, not permanent erasure. Project totals reflect the task's current project assignment; moving a task between projects reassigns its historical time in the report.
