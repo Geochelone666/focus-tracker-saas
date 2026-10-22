@@ -24,7 +24,7 @@ describe('schedule actions', () => {
   });
   it.each([true, false])('sets completed to %s and scopes updates to the owner', async done => {
     await toggleSchedule(id, done);
-    expect(mocks.update).toHaveBeenCalledWith({ is_done: done });
+    expect(mocks.update).toHaveBeenCalledWith({ is_done: done, completed_at: done ? expect.any(String) : null });
     expect(mocks.eq).toHaveBeenNthCalledWith(1, 'id', id);
     expect(mocks.eq).toHaveBeenNthCalledWith(2, 'user_id', 'owner');
   });

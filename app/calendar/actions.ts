@@ -32,7 +32,8 @@ export async function toggleSchedule(id: string, done: boolean) {
   try { id = validateId(id); if (typeof done !== 'boolean') throw new Error(); }
   catch { fail('This schedule could not be found. Please refresh and try again.'); }
   const { supabase, user } = await authenticate();
-  const { error } = await supabase.from('schedules').update({ is_done: done })
+  // Keep completed_at in step with is_done, as the planning actions do.
+  const { error } = await supabase.from('schedules').update({ is_done: done, completed_at: done ? new Date().toISOString() : null })
     .eq('id', id).eq('user_id', user.id);
   if (error) fail('Could not update your schedule. Please try again.');
   revalidatePath('/calendar');
