@@ -33,7 +33,7 @@ cp .env.example .env.local
 
 Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for your Supabase project in `.env.local`. Do not commit credentials or use a service role key in the browser. Existing local configuration should be preserved.
 
-Apply the SQL migrations in `supabase/migrations/` using the project's migration workflow; see [migration instructions](supabase/migrations/README.md). Existing deployments upgrading to calendar support need `008_create_schedules.sql` applied once. The expanded planning workflow additionally requires `009_planning_workflow.sql` before deploying the application update. See [upgrade instructions and feature details](docs/planning-workflow.md). Row-level security restricts data to the authenticated owner.
+Apply the SQL migrations in `supabase/migrations/` using the project's migration workflow; see [migration instructions](supabase/migrations/README.md). Existing deployments upgrading to calendar support need `008_create_schedules.sql` applied once. The expanded planning workflow additionally requires `009_planning_workflow.sql` before deploying the application update. Every deployment must also apply `20261022000000_restore_session_schedule_ownership.sql`: in file-name order the earlier `20260930002658` migration overwrote 009's focus-session policies and dropped the check that a linked schedule belongs to the user. See [upgrade instructions and feature details](docs/planning-workflow.md). Row-level security restricts data to the authenticated owner.
 
 ```bash
 npm run dev
@@ -50,7 +50,7 @@ npm run lint
 npm run build
 ```
 
-Unit tests cover validation, analytics, pagination, session concurrency, authentication actions, schedule creation and edits, recurrence, inbox capture, timezone boundaries, reminders, task-linked focus, soft deletion, and ownership filters. They do not replace live Supabase authentication or database policy verification. The SQL ownership regression check is in `supabase/tests/session_skill_ownership.sql`.
+Unit tests cover validation, analytics, pagination, session concurrency, authentication actions, schedule creation and edits, recurrence, inbox capture, timezone boundaries, reminders, task-linked focus, soft deletion, and ownership filters. They do not replace live Supabase authentication or database policy verification. The SQL regression checks in `supabase/tests/` run automatically: `lib/migrations.test.ts` applies every migration in file-name order to an in-memory PGlite database and executes them. You can also run them in the Supabase SQL Editor against a real project.
 
 ## Dates and time
 
