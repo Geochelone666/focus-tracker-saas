@@ -34,3 +34,11 @@ Run `supabase/tests/session_skill_ownership.sql` in the SQL Editor afterward. It
 Apply `009_planning_workflow.sql` after 008, before deploying the expanded planning app. It runs inside a transaction, preserves existing data, and can be rerun. It adds projects, daily reflections, optional dates for Inbox tasks, priority/estimates/energy/repeat metadata, soft deletion, and schedule-linked focus sessions. Its RLS policies preserve the existing skill ownership checks and add project/schedule ownership checks. The SECURITY INVOKER `edit_schedule` function atomically updates a single occurrence or shifts future unfinished occurrences.
 
 See [planning upgrade instructions](../../docs/planning-workflow.md) and `../tests/planning_workflow.sql` for the transactional regression check. Use two existing test accounts for that check; the fixture changes are rolled back. Do not deploy the new application before this migration succeeds.
+
+## Schedule ownership restore
+
+Migrations are applied in file-name order, so `20260930002658_enforce_session_skill_ownership.sql` runs after `009_planning_workflow.sql` and overwrote the focus-session write policies, dropping 009's `schedule_id` ownership check. `20261022000000_restore_session_schedule_ownership.sql` reinstates both the skill and schedule checks. New migrations must use a timestamp prefix later than `20261022000000` so they sort last.
+
+## Automated checks
+
+`lib/migrations.test.ts` (part of `npm test`) applies every migration in file-name order to an in-memory PGlite database with a minimal `auth` schema stub, runs every script in `supabase/tests/`, and checks anonymous isolation and schedule ownership. It does not replace verifying a hosted Supabase project.
