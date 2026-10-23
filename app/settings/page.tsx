@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { planningContext } from '@/lib/planning-data';
 import { saveTimezone } from '@/app/planning/actions';
 import { SubmitButton } from '@/components/submit-button';
@@ -7,6 +8,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { zone } = await planningContext();
   return <main className="mx-auto max-w-2xl px-4 py-10">
     <h1 className="text-3xl font-bold">Settings</h1>
+    <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Devices and AI</h2><p className="mb-3 text-sm">Sign in with the same account on your phone and computer. Visible pages check for updates every 30 seconds and when you return. Automatic refresh pauses while you have unsaved form input; reload or navigate after saving to resume.</p><Link href="/settings/integrations" prefetch={false} className="underline">Manage AI connections</Link></section>
     {typeof params.error === 'string' && <p role="alert" className="mt-4 text-red-800">{params.error}</p>}
     {params.saved === '1' && <p role="status" className="mt-4 text-emerald-800">Timezone saved.</p>}
     <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Your timezone</h2>

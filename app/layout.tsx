@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { DeviceSync } from "@/components/device-sync";
 import { Header } from "@/components/header";
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
     <html lang="en">
       <body>
         <Header />
+        <DeviceSync />
         {children}
       </body>
     </html>

@@ -82,3 +82,7 @@ Push to `main` to trigger the connected Vercel deployment. Configure the Supabas
 Dependency versions are locked. Next.js and its ESLint configuration are aligned, with patched PostCSS and source-map-js overrides. Check `npm audit --omit=dev` periodically; an audit result describes known advisories at the time of the check, not a guarantee against all vulnerabilities.
 
 The current full development-dependency audit still reports seven high-severity entries through braces (the registry currently has no patched release). Production dependency audit reports zero known advisories. Avoid processing untrusted glob patterns in development tools, and recheck for upstream fixes. Vitest is updated to 4.1.12.
+
+## Devices and AI clients
+
+The integration update requires migration **20261023000000** before deployment. Settings → Manage AI connections lets you create expiring, revocable read-only or schedule-editing keys. REST/OpenAPI and stateless MCP endpoints share owner isolation, revision checks, and a write log. Visible idle pages refresh across devices. See [setup, supported transports, limitations, and examples](docs/ai-connections.md).

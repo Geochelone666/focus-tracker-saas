@@ -42,3 +42,7 @@ Migrations are applied in file-name order, so `20260930002658_enforce_session_sk
 ## Automated checks
 
 `lib/migrations.test.ts` (part of `npm test`) applies every migration in file-name order to an in-memory PGlite database with a minimal `auth` schema stub, runs every script in `supabase/tests/`, and checks anonymous isolation and schedule ownership. It does not replace verifying a hosted Supabase project.
+
+## Devices and AI connections (20261023000000)
+
+Apply `20261023000000_ai_integrations.sql` after all existing migrations, including `20261022000000_restore_session_schedule_ownership.sql` and before deploying the integration UI. It is transactional and rerunnable. It adds hashed expiring/revocable integration keys, an owner-visible write log, schedule revision timestamps, and the narrow anonymous `integration_api` RPC. Existing owner RLS remains in place. No service-role key or Realtime publication is needed. See [AI connection instructions](../../docs/ai-connections.md).
