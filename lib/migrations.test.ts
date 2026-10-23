@@ -59,6 +59,8 @@ describe("supabase migrations", () => {
     }
   });
 
+  it("can rerun the mobile notification migration",async()=>{db=await freshDatabase();await expect(db.exec(await readFile(path.join(migrationsDir,"20261023010000_mobile_push.sql"),"utf8"))).resolves.toBeDefined();});
+
   it("keeps schedule ownership on focus sessions after the last migration", async () => {
     db = await freshDatabase();
     const foreign = (

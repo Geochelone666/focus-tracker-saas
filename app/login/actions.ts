@@ -26,6 +26,8 @@ function getValidatedCredentials(formData: FormData) {
   return { email, password };
 }
 
+function destination(formData:FormData){const next=formData.get('next');return typeof next==='string'&&/^\/plans\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(next)?next:'/today';}
+
 export async function login(formData: FormData) {
   const supabase = await createClient();
   const { email, password } = getValidatedCredentials(formData);
@@ -36,11 +38,11 @@ export async function login(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?message=${encodeURIComponent(authErrorMessage(error))}`);
+    redirect(`/login?message=${encodeURIComponent(authErrorMessage(error))}${destination(formData)!=='/today'?'&next='+encodeURIComponent(destination(formData)):''}`);
   }
 
   revalidatePath("/", "layout");
-  redirect("/today");
+  redirect(destination(formData));
 }
 
 export async function signup(formData: FormData) {
@@ -53,7 +55,7 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?message=${encodeURIComponent(authErrorMessage(error))}`);
+    redirect(`/login?message=${encodeURIComponent(authErrorMessage(error))}${destination(formData)!=='/today'?'&next='+encodeURIComponent(destination(formData)):''}`);
   }
 
   if (!data.session) {
@@ -61,5 +63,5 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/today");
+  redirect(destination(formData));
 }
