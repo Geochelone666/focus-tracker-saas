@@ -97,4 +97,26 @@ do $$ declare j record; n integer; begin
  if n<>0 then raise exception 'Catch-up claimed reminder twice'; end if;
  if public.check_push_delivery(j.delivery_id,j.lease_id,'2026-10-25T16:11:01Z') then raise exception 'Stale catch-up was sent'; end if;
 end $$;
+
+-- Regression: an account may create a plan only five minutes before it starts
+-- while the device asks for a ten-minute lead. The previously expired lead
+-- cannot silently suppress an otherwise upcoming reminder.
+do $ declare j record; n integer; begin
+ update public.push_devices set enabled=true,last_seen_at='2026-10-26T16:15:01Z'
+  where transport='expo';
+ update public.schedules set scheduled_date='2026-10-26',scheduled_time='12:20',
+  is_done=false,deleted_at=null
+  where id='f1111111-1111-4111-8111-111111111111';
+ select count(*) into n from public.claim_push_reminders('2026-10-26T16:09:00Z',100);
+ if n<>0 then raise exception 'Reminder claimed before advance time'; end if;
+ select * into j from public.claim_push_reminders('2026-10-26T16:15:01Z',100);
+ if j.schedule_id is distinct from 'f1111111-1111-4111-8111-111111111111'::uuid
+  then raise exception 'Short-notice plan missed by scheduler'; end if;
+ if not public.check_push_delivery(j.delivery_id,j.lease_id,'2026-10-26T16:15:02Z')
+  then raise exception 'Short-notice reminder rejected'; end if;
+ select count(*) into n from public.claim_push_reminders('2026-10-26T16:15:30Z',100);
+ if n<>0 then raise exception 'Short-notice reminder duplicated'; end if;
+ select count(*) into n from public.claim_push_reminders('2026-10-26T16:22:00Z',100);
+ if n<>0 then raise exception 'Stale reminder was claimed after plan start'; end if;
+end $;
 rollback;
