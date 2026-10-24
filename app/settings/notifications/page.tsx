@@ -9,10 +9,17 @@ export default async function Notifications({searchParams}:{searchParams:Promise
  const {data,error}=await supabase.from('push_devices').select('id,name,platform,transport,lead_minutes,enabled,last_seen_at').eq('user_id',user.id).order('created_at',{ascending:false}).limit(100);
  // Only request history for device IDs already authorized by the owner's RLS query.
  // The delivery table is intentionally service-role-only; do not expose its raw rows or tokens.
- const history=!error&&data?.length ? await pushAdmin().from('push_deliveries')
-  .select('state,scheduled_at,created_at,error_code')
-  .in('device_id',data.map(device=>device.id))
-  .order('created_at',{ascending:false}).limit(10) : null;
+ type DeliveryStatus={state:string;scheduled_at:string;created_at:string;error_code:string|null};
+ let history:{data:DeliveryStatus[]|null;error:boolean}|null=null;
+ if(!error&&data?.length){
+  try{
+   const result=await pushAdmin().from('push_deliveries')
+    .select('state,scheduled_at,created_at,error_code')
+    .in('device_id',data.map(device=>device.id))
+    .order('created_at',{ascending:false}).limit(10);
+   history={data:result.data,error:Boolean(result.error)};
+  }catch{history={data:null,error:true};}
+ }
  return <main className="mx-auto max-w-2xl px-4 py-10 space-y-5"><Link prefetch={false} href="/settings" className="underline">Back to settings</Link><h1 className="text-3xl font-bold">Phone reminders</h1>
  <p>Install Focus Tracker from your browser on iPhone or Android, sign in with the same account, then enable notifications below. Permission is optional. No contacts or location permission is requested.</p>
  <p className="text-sm text-slate-600">Notifications use your account timezone ({zone}) and each phone’s reminder timing. All-day, completed, and trashed plans are excluded. The server checks the latest schedule, including changes made by AI. Delivery needs the configured notification service and an internet connection; phone settings can delay or suppress alerts.</p>
