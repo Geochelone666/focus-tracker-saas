@@ -47,7 +47,7 @@ export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:
  }
  function drag(event:React.DragEvent,id:string,kind='move'){event.dataTransfer.setData('application/x-focus-task',JSON.stringify({id,kind}));event.dataTransfer.effectAllowed='move';}
  return <section className="my-6 min-w-0" aria-label={`${view} time blocking`}>
-  <p className="mb-3 text-sm">Times follow {zone}. Drag an Inbox task onto the timeline, move a block, or drag its Resize handle. The editor provides the same operations with keyboard or touch. Overlaps are allowed. DST dates show elapsed durations; repeated start times use the first occurrence.</p>
+  <p className="mb-3 text-sm">Times follow {zone}. Drag an Inbox task onto the timeline, move a block, or drag its Resize handle. The editor provides the same operations with keyboard or touch. Overlaps are allowed. DST dates show elapsed durations; repeated start times use the later occurrence, matching server reminders.</p>
   <div className="mb-3 flex flex-wrap gap-2"><label className="text-sm">Arrange task<select aria-label="Arrange task" value={selected} onChange={e=>setSelected(e.target.value)} className="ml-2 max-w-full rounded border p-2"><option value="">Choose a task</option>{live.filter(task=>!task.is_done).map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
    {inbox.map(task=><button key={task.id} draggable onDragStart={event=>drag(event,task.id)} onClick={()=>setSelected(task.id)} className="max-w-full break-words rounded border px-3 py-2 text-sm">Inbox: {task.title}</button>)}
   </div>
@@ -67,7 +67,7 @@ export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:
         <button onClick={()=>setSelected(task.id)} className="w-full break-words text-left font-semibold underline">{task.title}</button>
         <p>{continued ? "Continued · " : ""}{task.scheduled_time?.slice(0,5)}–{interval?timestampLabel(interval.end,zone):'?'} · {task.estimated_minutes??'?'}m{carries ? " · continues tomorrow" : ""}</p>
         {conflicts.length>0&&<p role="status" className="text-amber-900">Overlaps {conflicts.length} task(s)</p>}
-        {interval?.ambiguous&&<p>Repeated time: first occurrence</p>}
+        {interval?.ambiguous&&<p>Repeated time: standard occurrence</p>}
         {!interval&&<p className="text-amber-900">Check time / duration</p>}
         {!task.is_done&&<button draggable onDragStart={event=>{event.stopPropagation();drag(event,task.id,'resize');}} onClick={()=>setSelected(task.id)} aria-label={`Resize ${task.title}`} className="absolute bottom-0 left-0 w-full cursor-ns-resize border-t bg-blue-50 text-left">Resize / edit</button>}
        </article>;
