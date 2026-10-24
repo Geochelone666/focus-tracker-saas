@@ -44,10 +44,14 @@ export function WebNotifications({userId}:{userId:string}){
  </section>;
 }
 export function WebPushHeartbeat({userId}:{userId:string}){
- useEffect(()=>{let last=0;
- const refresh=async()=>{try{if(document.visibilityState!=='visible'||Date.now()-last<3600000||localStorage.getItem('focus-push-user')!==userId)return;last=Date.now();const id=localStorage.getItem('focus-push-device');if(!id)return;
- if('Notification'in window&&Notification.permission!=='granted'){await request('DELETE',{id});localStorage.removeItem('focus-push-user');return;}
- const result=await request('PATCH',{id});if(!result.enabled)localStorage.removeItem('focus-push-user');}catch{/* Retry on the next visible visit. */}};
+ useEffect(()=>{let last=0,inflight=false;
+ const refresh=async()=>{if(inflight||document.visibilityState!=='visible'||Date.now()-last<3600000||localStorage.getItem('focus-push-user')!==userId)return;
+ const id=localStorage.getItem('focus-push-device');if(!id)return;inflight=true;
+ try{
+  if('Notification'in window&&Notification.permission!=='granted'){await request('DELETE',{id});localStorage.removeItem('focus-push-user');document.cookie='focus_push_device=; Path=/; SameSite=Lax; Secure; Max-Age=0';last=Date.now();return;}
+  const result=await request('PATCH',{id});last=Date.now();if(!result.enabled)localStorage.removeItem('focus-push-user');
+ }catch{/* Failed heartbeats remain eligible for retry when the page becomes visible. */}
+ finally{inflight=false;}};
  void refresh();const listener=()=>void refresh();window.addEventListener('focus',listener);document.addEventListener('visibilitychange',listener);const timer=setInterval(listener,3600000);
  return()=>{clearInterval(timer);window.removeEventListener('focus',listener);document.removeEventListener('visibilitychange',listener);};
  },[userId]);return null;
