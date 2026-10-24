@@ -5,7 +5,7 @@ A personal focus and planning app built with Next.js 15, React 19, TypeScript, T
 ## Features
 
 - Email/password signup and login, including email confirmation guidance.
-- Protected dashboard with focus sessions, running timer, stale-session recovery, daily goals, and seven-day statistics.
+- Protected dashboard with count-up/countdown focus, persisted pause/resume, outcome notes, preserved abandoned sessions, daily goals, and seven-day statistics.
 - Personal skill checklist with per-skill focus totals.
 - Paginated session history and CSV export.
 - Today workspace, Inbox capture, searchable task views, reversible Trash, and monthly calendar.
@@ -86,3 +86,7 @@ The current full development-dependency audit still reports seven high-severity 
 ## Devices and AI clients
 
 The integration update requires migration **20261023000000** before deployment. Settings → Manage AI connections lets you create expiring, revocable read-only or schedule-editing keys. REST/OpenAPI and stateless MCP endpoints share owner isolation, revision checks, and a write log. Visible idle pages refresh across devices. See [setup, supported transports, limitations, and examples](docs/ai-connections.md).
+
+## Focus V1 delivery
+
+Batch 1 adds database-authoritative focus timing, pause/resume, custom countdowns, and concurrent-device conflict checks on Today and Dashboard. Apply migration `20261024000000_focus_state.sql` after all previous migrations before deploying. See [audit and ordered delivery queue](docs/v1-audit.md) and [state model, validation and rollback](docs/focus-state.md). Break cycles, day/week time blocks and full planned/actual analysis are subsequent batches; hosted Supabase behavior remains unverified.

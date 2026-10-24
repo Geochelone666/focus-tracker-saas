@@ -6,10 +6,8 @@ import { PlanForm } from '@/components/plan-form';
 import { PlanCard } from '@/components/plan-card';
 import { ReflectionForm } from '@/components/planning-forms';
 import { Reminders } from '@/components/reminders';
-import { SessionTimer } from '@/components/session-timer';
-import { classifyActiveSession } from '@/lib/active-session';
-import { stopSession } from '@/app/dashboard/actions';
-import { SubmitButton } from '@/components/submit-button';
+import { FocusControls } from '@/components/focus-controls';
+import { FOCUS_COLUMNS, type FocusSession } from '@/lib/focus-state';
 
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;
@@ -21,8 +19,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const overdue = sortPlans(live.filter(item => item.scheduled_date && item.scheduled_date < today && !item.is_done));
   const sessions = await readAllRows<{ id: string; schedule_id: string | null; started_at: string; ended_at: string | null; duration_sec: number | null }>((from,to) => supabase.from('focus_sessions')
     .select('id,schedule_id,started_at,ended_at,duration_sec').eq('user_id',user.id).order('id').range(from,to));
-  const active = sessions.filter(item => !item.ended_at).sort((a,b) => b.started_at.localeCompare(a.started_at))[0];
-  const stale = active && classifyActiveSession(active.started_at,new Date()) === 'stale';
+  const { data: running, error: runningError } = await supabase.from('focus_sessions').select(FOCUS_COLUMNS).eq('user_id',user.id).is('ended_at',null).maybeSingle();
+  if (runningError) throw runningError;
+  const active = running as FocusSession | null;
   const activePlan = active ? live.find(plan => plan.id === active.schedule_id) : null;
   const focused = sessions.filter(item => dayKey(new Date(item.started_at), zone) === today).reduce((sum,item) => sum + (item.duration_sec ?? 0),0) / 60;
   const estimated = plannedMinutes(plans);
@@ -42,15 +41,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     {estimated > 480 && <p role="status" className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900">More than 8 hours are planned. Consider moving a few items or leaving room for breaks.</p>}
     {active && <section className="mb-6 rounded-lg border bg-white p-5">
       <h2 className="font-semibold">Focusing{activePlan ? `: ${activePlan.title}` : ''}</h2>
-      {stale ? <p className="mt-3 text-sm text-slate-600">This session has been running for over 12 hours. Open Focus to resume or discard it before recording more time.</p> : <>
-      <SessionTimer startedAt={active.started_at} />
-      <form action={stopSession} className="mt-4 flex flex-wrap gap-3">
-        <input type="hidden" name="session_id" value={active.id} /><input type="hidden" name="return_to" value="/today" />
-        <label className="sr-only" htmlFor="focus-note">Focus note</label><input id="focus-note" name="note" maxLength={200} placeholder="What did you work on? (optional)" className="rounded border px-3 py-2" />
-        <SubmitButton label="Stop focus" pendingLabel="Stopping…" />
-      </form>
-      <p className="mt-2 text-xs text-slate-500">Stopping records your time. Mark the plan complete separately when you are ready.</p>
-      </>}
+      <FocusControls key={active.id} session={active} skills={skills} observedAt={Date.now()} />
       <Link href="/dashboard" className="text-sm underline">Session recovery and details</Link>
     </section>}
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">

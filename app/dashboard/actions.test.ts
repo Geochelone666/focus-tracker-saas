@@ -177,9 +177,9 @@ describe("active session persistence", () => {
   });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-  it("resumes the stale row from now and revalidates", async () => {
+  it("pauses a stale row without rewriting its original start", async () => {
     await expect(resumeStaleSession()).rejects.toThrow(/^Redirect: \/dashboard$/);
-    expect(query.update).toHaveBeenCalledWith({ started_at: now.toISOString() });
+    expect(query.update).toHaveBeenCalledWith({ focus_status: "paused" });
     expect(query.eq).toHaveBeenCalledWith("id", stale.id);
     expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(query.eq).toHaveBeenCalledWith("started_at", stale.started_at);
@@ -189,7 +189,8 @@ describe("active session persistence", () => {
 
   it("discards only the user's still-active stale row", async () => {
     await expect(discardStaleSession()).rejects.toThrow(/^Redirect: \/dashboard$/);
-    expect(query.delete).toHaveBeenCalledOnce();
+    expect(query.delete).not.toHaveBeenCalled();
+    expect(query.update).toHaveBeenCalledWith({ focus_status: "abandoned" });
     expect(query.eq).toHaveBeenCalledWith("id", stale.id);
     expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(query.eq).toHaveBeenCalledWith("started_at", stale.started_at);
@@ -232,8 +233,8 @@ describe("active session persistence", () => {
     result = { data: [latest, stale, oldest], error: null };
     await cleanupDuplicateActiveSessions();
     expect(query.update.mock.calls).toEqual([
-      [{ ended_at: stale.started_at, duration_sec: 0 }],
-      [{ ended_at: oldest.started_at, duration_sec: 0 }]
+      [{ ended_at: stale.started_at, duration_sec: 0, focus_status: "abandoned" }],
+      [{ ended_at: oldest.started_at, duration_sec: 0, focus_status: "abandoned" }]
     ]);
     expect(query.eq).not.toHaveBeenCalledWith("id", latest.id);
     expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Focus V1 batch 1
+
+- Add persistent count-up/countdown timing, pause/resume, revision-checked atomic focus transitions and retained zero-credit abandonment.
+- Share focus controls on Today and Dashboard, with outcome notes, silent countdown completion and refresh recovery.
+- Preserve completed history and owner/AI boundaries in additive migration `20261024000000_focus_state.sql`; deploy it before application changes.
+- Add focus SQL, unit/action and authenticated fixture-backed browser regressions, plus the V1 audit/delivery queue and rollback instructions.
+- Break cycles and the complete capture-to-review flow remain outstanding; no production verification is claimed.
+
+
 ## 2026-10-22
 
 - Security (database): new migration `20261022000000_restore_session_schedule_ownership.sql`. Migrations run in file-name order, so `20260930002658` ran after `009` and dropped its check that a session's linked schedule belongs to the user. Apply it to every deployment.
