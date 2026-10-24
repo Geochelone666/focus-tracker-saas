@@ -83,4 +83,18 @@ do $$ declare j record;begin
  if j.web_subscription->>'endpoint' is distinct from 'https://web.push.apple.com/test' then raise exception 'Web push job missing';end if;
  if j.expo_token is not null then raise exception 'Web push required an Expo token';end if;
 end $$;
+-- Regression: a temporarily delayed scheduler still catches up before the plan begins.
+-- This is 8 minutes after the configured 10-minute advance reminder, beyond the old 5-minute grace window.
+do $$ declare j record; n integer; begin
+ update public.push_devices set enabled=false where transport='web';
+ update public.push_devices set enabled=true,last_seen_at='2026-10-25T16:08:00Z' where transport='expo';
+ update public.schedules set scheduled_date='2026-10-25',scheduled_time='12:10',is_done=false,deleted_at=null
+  where id='f1111111-1111-4111-8111-111111111111';
+ select * into j from public.claim_push_reminders('2026-10-25T16:08:00Z',100);
+ if j.schedule_id is distinct from 'f1111111-1111-4111-8111-111111111111'::uuid then raise exception 'Catch-up missed pending reminder'; end if;
+ if not public.check_push_delivery(j.delivery_id,j.lease_id,'2026-10-25T16:08:00Z') then raise exception 'Catch-up was rejected before send'; end if;
+ select count(*) into n from public.claim_push_reminders('2026-10-25T16:08:30Z',100);
+ if n<>0 then raise exception 'Catch-up claimed reminder twice'; end if;
+ if public.check_push_delivery(j.delivery_id,j.lease_id,'2026-10-25T16:11:01Z') then raise exception 'Stale catch-up was sent'; end if;
+end $$;
 rollback;
