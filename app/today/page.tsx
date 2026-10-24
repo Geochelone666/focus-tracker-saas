@@ -51,10 +51,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       <div>
         <section><h2 className="mb-3 text-xl font-semibold">Your day</h2>
           {plans.length === 0 && <p className="mb-4 text-slate-500">A fresh start. Add a plan or pick something from your Inbox.</p>}
-          <ul className="space-y-3">{plans.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
+          <ul className="space-y-3">{plans.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
         </section>
         {overdue.length > 0 && <section className="mt-6"><h2 className="mb-3 text-xl font-semibold">Carry-over · {overdue.length}</h2><p className="mb-3 text-sm text-slate-600">Plans change. Choose what still matters and reschedule the rest.</p>
-          <ul className="space-y-3">{overdue.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
+          <ul className="space-y-3">{overdue.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
         </section>}
       </div>
       <aside className="space-y-6">

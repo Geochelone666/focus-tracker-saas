@@ -7,14 +7,14 @@ import type { Choice, Schedule } from '@/lib/planning';
 import { SubmitButton } from './submit-button';
 
 export const fieldClass = 'mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900';
-export function PlanForm({ plan, date = '', projects = [], skills = [], projectId = '', returnTo = '/today' }: { plan?: Schedule; date?: string; projects?: Choice[]; skills?: Choice[]; projectId?: string; returnTo?: string }) {
+export function PlanForm({ plan, date = '', projects = [], skills = [], projectId = '', returnTo = '/today', series = [] }: { series?: Schedule[]; plan?: Schedule; date?: string; projects?: Choice[]; skills?: Choice[]; projectId?: string; returnTo?: string }) {
   const [state, action] = useActionState(plan ? editPlan.bind(null, plan.id) : createPlan, {});
   const initial: Record<string,string> = {
     title: plan?.title ?? '', scheduled_date: plan?.scheduled_date ?? date,
     scheduled_time: plan?.scheduled_time?.slice(0,5) ?? '',
     priority: plan?.priority ?? 'normal', estimated_minutes: String(plan?.estimated_minutes ?? ''),
     energy: plan?.energy ?? '', project_id: plan?.project_id ?? projectId, skill_id: plan?.skill_id ?? '',
-    repeat: 'none', occurrences: '12', scope: 'one', notes: plan?.notes ?? ''
+    deadline:plan?.deadline ?? '', repeat: 'none', occurrences: '12', scope: 'one', notes: plan?.notes ?? ''
   };
   const initialKey = JSON.stringify(initial);
   const editing = Boolean(plan);
@@ -25,6 +25,8 @@ export function PlanForm({ plan, date = '', projects = [], skills = [], projectI
   }, [state.savedAt, editing, initialKey]);
   const bind = (name: string) => ({ value: draft[name] ?? '', onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { const value = event.target.value; setDraft(current => ({ ...current, [name]: value })); } });
   return <form action={action} className="space-y-3">
+    <input type="hidden" name="expected_updated_at" value={plan?.updated_at ?? ''} />
+    <input type="hidden" name="series_revisions" value={JSON.stringify(Object.fromEntries(series.filter(item=>plan?.series_id && item.series_id===plan.series_id).map(item=>[item.id,item.updated_at])))} />
     <input type="hidden" name="return_to" value={returnTo} />
     <input type="hidden" name="return_date" value={plan?.scheduled_date ?? date} />
     {state.error && <p role="alert" className="rounded bg-red-50 p-3 text-red-800">{state.error}</p>}
@@ -34,7 +36,8 @@ export function PlanForm({ plan, date = '', projects = [], skills = [], projectI
       <label className="block text-sm">Date (optional)<input name="scheduled_date" type="date" min="0002-01-01" max="9998-12-31" {...bind('scheduled_date')} className={fieldClass} /></label>
       <label className="block text-sm">Time (optional)<input name="scheduled_time" type="time" {...bind('scheduled_time')} className={fieldClass} /></label>
     </div>
-    <p className="text-xs text-slate-500">No date? It goes to your Inbox. A time needs a date.</p>
+    <label className="block text-sm">Deadline (optional)<input name="deadline" type="date" min="0002-01-01" max="9998-12-31" {...bind("deadline")} className={fieldClass} /></label>
+    <p className="text-xs text-slate-500">The deadline is separate from the planned execution date. No date? It goes to your Inbox. A time needs a date.</p>
     <details>
       <summary className="cursor-pointer text-sm font-medium">{plan ? 'Details and links' : 'More options: priority, duration, repeat and links'}</summary>
       <div className="mt-3 space-y-3">

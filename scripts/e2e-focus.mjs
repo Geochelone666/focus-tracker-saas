@@ -11,7 +11,7 @@ const owner = '00000000-0000-4000-8000-000000000001';
 const fixturePort = Number(process.env.FOCUS_FIXTURE_PORT || 54329);
 const appPort = Number(process.env.FOCUS_APP_PORT || 3100);
 const base = `http://localhost:${appPort}`;
-const db = new PGlite();
+const db = new PGlite({parsers:{1184:value=>value,1082:value=>value}});
 await db.exec(`create role anon; create role authenticated; create schema auth;
 create table auth.users(id uuid primary key,email text);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
@@ -45,6 +45,7 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/mutate_schedule') return (await db.query('select public.mutate_schedule($1,$2,$3,$4,$5) as changed',[body.p_id,body.p_expected,body.p_patch,body.p_future??false,body.p_revisions??{}])).rows[0].changed;
           if(url.pathname==='/rest/v1/rpc/next_focus_phase') return (await db.query('select * from public.next_focus_phase($1)',[body.p_id])).rows[0];
           if(url.pathname==='/rest/v1/rpc/transition_focus') {
             const result=await db.query('select * from public.transition_focus($1,$2,$3,$4,$5)',[body.p_id,body.p_revision,body.p_action,body.p_note,body.p_skill ?? null]);
@@ -53,8 +54,12 @@ const server=createServer(async(req,res)=>{
           const table=url.pathname.split('/').at(-1);
           if(!['focus_sessions','profiles','skills','schedules','projects','daily_reflections'].includes(table)) throw new Error('Unsupported fixture table');
           if(req.method==='POST') {
-            const keys=Object.keys(body),values=Object.values(body);
-            return (await db.query(`insert into public.${safe(table)} (${keys.map(safe)}) values (${values.map((_,i)=>`$${i+1}`)}) returning *`,values)).rows;
+            const inserted=[];
+            await db.exec('begin');
+            try{for(const row of Array.isArray(body)?body:[body]){
+              const keys=Object.keys(row),values=Object.values(row);
+              inserted.push(...(await db.query(`insert into public.${safe(table)} (${keys.map(safe)}) values (${values.map((_,i)=>`$${i+1}`)}) returning *`,values)).rows);
+            }await db.exec('commit');return inserted;}catch(error){await db.exec('rollback');throw error;}
           }
           if(req.method!=='GET') throw new Error('Unsupported fixture method');
           const params=[],conditions=[];
@@ -141,7 +146,48 @@ try {
   const overflow=await a.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);assert.ok(overflow<=0,`390px overflow: ${overflow}`);
   await a.getByRole('button',{name:'Abandon focus',exact:true}).click();
   await waitFor(async()=>(await rows()).some(s=>s.focus_status==='abandoned'&&s.duration_sec===0),'Abandon must retain zero-credit row');
+  // Capture -> schedule -> reload -> desktop drag/resize -> mobile edit -> Inbox.
+  await a.goto(base+'/inbox');
+  const capture=a.getByRole('heading',{name:'Capture a task'}).locator('..').locator('form');
+  await capture.getByLabel('Title',{exact:true}).fill('Calendar captured task');
+  await capture.getByText('More options: priority, duration, repeat and links',{exact:true}).click();
+  await capture.getByLabel('Estimated minutes').fill('60');
+  await capture.getByLabel('Deadline (optional)').fill('2026-12-31');
+  await capture.getByRole('button',{name:'Add plan',exact:true}).click();
+  await capture.getByRole('status').waitFor();
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto'}).format(new Date());
+  await a.goto(base+`/calendar?date=${today}&view=day`);
+  await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
+  const editor=a.getByRole('heading',{name:'Arrange: Calendar captured task'}).locator('..');
+  await editor.getByLabel('Start time').fill('14:00');await editor.getByLabel('Duration (minutes)').fill('90');
+  await editor.getByRole('button',{name:'Save time block'}).click();await editor.getByRole('status').waitFor();
+  await a.reload();
+  const calendarTask=()=>serial(async()=>(await db.query("select * from public.schedules where title='Calendar captured task'")).rows[0]);
+  assert.equal((await calendarTask()).scheduled_time,'14:00:00');assert.equal((await calendarTask()).estimated_minutes,90);assert.equal((await calendarTask()).deadline,'2026-12-31');
+  await a.setViewportSize({width:1200,height:900});
+  const timeline=a.getByLabel(`Timeline ${today}`,{exact:true});
+  async function dropBlock(kind,minute){
+    const task=await calendarTask();
+    await timeline.evaluate((element,payload)=>{
+      const transfer=new DataTransfer();transfer.setData('application/x-focus-task',JSON.stringify({id:payload.id,kind:payload.kind}));
+      element.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer,clientY:element.getBoundingClientRect().top+payload.minute*.8}));
+    },{id:task.id,kind,minute});
+  }
+  await dropBlock('move',900);await waitFor(async()=>(await calendarTask()).scheduled_time==='15:00:00','Calendar drag did not persist');
+  await a.reload();await dropBlock('resize',1020);await waitFor(async()=>(await calendarTask()).estimated_minutes===120,'Calendar resize did not persist');
+  await a.reload();await a.setViewportSize({width:390,height:844});
+  await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
+  const mobileEditor=a.getByRole('heading',{name:'Arrange: Calendar captured task'}).locator('..');
+  await mobileEditor.getByLabel('Duration (minutes)').fill('60');await mobileEditor.getByRole('button',{name:'Save time block'}).click();
+  await waitFor(async()=>(await calendarTask()).estimated_minutes===60,'Mobile edit did not persist');
+  assert.equal((await calendarTask()).deadline,'2026-12-31');
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile calendar overflow');
+  await a.reload();await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
+  const moveBack=a.getByRole('heading',{name:'Arrange: Calendar captured task'}).locator('..');
+  await moveBack.getByLabel('Planned date').fill('');await moveBack.getByLabel('Start time').fill('');
+  await moveBack.getByRole('button',{name:'Save time block'}).click();
+  await waitFor(async()=>(await calendarTask()).scheduled_date===null,'Return to Inbox failed');
   assert.deepEqual(errors,[],'No browser runtime errors');
-  console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, 390px controls.');
-} catch(error) {console.error(logs.slice(-10000));throw error;}
+  console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls.');
+} catch(error) {console.error(logs.slice(-10000));const page=browser?.contexts()[0]?.pages()[0];if(page)console.error((await page.locator('body').innerText()).slice(-6000));throw error;}
 finally {await browser?.close();app.kill('SIGTERM');await new Promise(resolve=>server.close(resolve));await queue;await db.close();}
