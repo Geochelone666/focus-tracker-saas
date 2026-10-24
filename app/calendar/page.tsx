@@ -1,3 +1,5 @@
+import { readAnalytics } from '@/lib/analytics-report';
+import { addDays } from '@/lib/planning';
 import { TimeBlockCalendar } from '@/components/time-block-calendar';
 import Link from 'next/link';
 import { planningContext, planningData } from '@/lib/planning-data';
@@ -11,6 +13,9 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
   const context = await planningContext();
   const { today, zone } = context;
   const { schedules: allSchedules, projects, skills } = await planningData(context);
+  const {data:taskTotals,error:taskError}=await context.supabase.rpc('task_focus_totals',{p_ids:allSchedules.map(item=>item.id)});
+  if(taskError)throw taskError;
+  const actual=new Map<string,number>((taskTotals??[]).map((row:{schedule_id:string;seconds:number})=>[row.schedule_id,Number(row.seconds)/60]));
   let selected = typeof searchParams.date === 'string' && validDate(searchParams.date) && searchParams.date >= '0002-01-01' && searchParams.date <= '9998-12-31' ? searchParams.date : today;
   let month = typeof searchParams.month === 'string' ? searchParams.month : selected.slice(0, 7);
   let calendar;
@@ -18,6 +23,8 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
   catch { month = today.slice(0, 7); calendar = calendarMonth(month); }
   if (!calendar.days.includes(selected)) selected = `${month}-01`;
   const view=searchParams.view==='day'||searchParams.view==='week'?searchParams.view:'month';
+  const start=view==='week'?addDays(selected,-((new Date(`${selected}T12:00:00Z`).getUTCDay()+6)%7)):selected;
+  const totals=view==='month'?null:await readAnalytics(context.supabase,start,view==='week'?addDays(start,6):start);
   const status = searchParams.status === 'open' || searchParams.status === 'completed' ? searchParams.status : 'all';
   const schedules = allSchedules.filter(item => !item.deleted_at && item.scheduled_date && calendar.days.includes(item.scheduled_date));
   const daySchedules = sortPlans(schedules.filter(item => item.scheduled_date === selected));
@@ -29,6 +36,7 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
       <p className="mt-2 mb-6 text-slate-600">Plan your day and check off your progress. Time and notes are optional.</p>
       {typeof searchParams.error === 'string' && <p role="alert" className="mb-4 rounded bg-red-50 p-4 text-red-800">{searchParams.error}</p>}
       <nav aria-label="Calendar view" className="mb-4 flex gap-4">{(['day','week','month'] as const).map(item=><Link key={item} href={`?date=${selected}&view=${item}`} aria-current={view===item?'page':undefined} className="capitalize underline">{item}</Link>)}</nav>
+      {totals&&<div className="my-4 grid gap-2 sm:grid-cols-3"><p>Planned: {totals.days.reduce((sum,day)=>sum+Number(day.planned_minutes??0),0)}m</p><p>Actual focus: {Math.floor(totals.days.reduce((sum,day)=>sum+Number(day.focus_seconds),0)/60)}m</p><p>Breaks: {Math.floor(totals.days.reduce((sum,day)=>sum+Number(day.break_seconds),0)/60)}m</p></div>}
       {view!=='month'&&<TimeBlockCalendar tasks={allSchedules} date={selected} view={view} zone={zone}/>}
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <section className="min-w-0 rounded-lg border bg-white p-3 sm:p-5" aria-label="Monthly calendar">
@@ -65,7 +73,7 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
         </nav>
         {selectedSchedules.length === 0 && <p className="text-slate-500">{daySchedules.length ? 'No schedules match this filter.' : 'No schedules for this day. Add your first plan above.'}</p>}
         <ul className="space-y-3">
-          {selectedSchedules.map(plan => <PlanCard series={allSchedules} key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/calendar" />)}
+          {selectedSchedules.map(plan => <PlanCard actualMinutes={actual.get(plan.id)} series={allSchedules} key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/calendar" />)}
         </ul>
       </section>
     </main>

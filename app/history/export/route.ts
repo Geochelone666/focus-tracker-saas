@@ -35,7 +35,7 @@ export async function GET() {
     sessions.push(...data);
   }
 
-  return new Response(buildSessionCsv(sessions, now.getTime()), {
+  return new Response(buildSessionCsv(sessions, now.getTime(), true), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="focus-sessions-${now.toISOString().slice(0, 10)}.csv"`,

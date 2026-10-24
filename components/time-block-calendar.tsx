@@ -1,5 +1,5 @@
 'use client';
-import { useActionState, useEffect, useState, useTransition } from 'react';
+import { useActionState, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveTimeBlock, type BlockResult } from '@/app/calendar/block-actions';
 import { addDays, type Schedule } from '@/lib/planning';
@@ -9,8 +9,10 @@ import { SubmitButton } from './submit-button';
 function BlockEditor({task,tasks,date}:{task:Schedule;tasks:Schedule[];date:string}){
  const [state,action]=useActionState(saveTimeBlock,{});
  const [expected,setExpected]=useState(task.updated_at??'');
- useEffect(()=>{if(state.success)setExpected(task.updated_at??'');},[state.success,task.updated_at]);
- return <form action={action} className="mt-3 grid gap-3 rounded border bg-white p-4 sm:grid-cols-2">
+ const dirty=useRef(false),handledSave=useRef<number|undefined>(undefined);
+ useEffect(()=>{if(!dirty.current)setExpected(task.updated_at??'');},[task.updated_at]);
+ useEffect(()=>{if(state.savedAt&&state.savedAt!==handledSave.current){handledSave.current=state.savedAt;dirty.current=false;setExpected(task.updated_at??'');}},[state.savedAt,task.updated_at]);
+ return <form action={action} onInput={()=>{dirty.current=true;}} onChange={()=>{dirty.current=true;}} className="mt-3 grid gap-3 rounded border bg-white p-4 sm:grid-cols-2">
   <h3 className="font-semibold sm:col-span-2">Arrange: {task.title}</h3>
   <input type="hidden" name="id" value={task.id}/><input type="hidden" name="expected_updated_at" value={expected}/>
   <input type="hidden" name="series_revisions" value={JSON.stringify(Object.fromEntries(tasks.filter(item=>task.series_id && item.series_id===task.series_id).map(item=>[item.id,item.updated_at])))}/>

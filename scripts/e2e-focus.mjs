@@ -45,6 +45,10 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/analytics_report') return (await db.query('select public.analytics_report($1,$2,$3) as report',[body.p_from,body.p_to,body.p_offset??0])).rows[0].report;
+          if(url.pathname==='/rest/v1/rpc/task_focus_totals') return (await db.query('select * from public.task_focus_totals($1)',[body.p_ids])).rows;
+          if(url.pathname==='/rest/v1/rpc/project_focus_totals') return (await db.query('select * from public.project_focus_totals()')).rows;
+          if(url.pathname==='/rest/v1/rpc/skill_focus_totals') return (await db.query('select * from public.skill_focus_totals($1,$2)',[body.p_from,body.p_to])).rows;
           if(url.pathname==='/rest/v1/rpc/mutate_schedule') return (await db.query('select public.mutate_schedule($1,$2,$3,$4,$5) as changed',[body.p_id,body.p_expected,body.p_patch,body.p_future??false,body.p_revisions??{}])).rows[0].changed;
           if(url.pathname==='/rest/v1/rpc/next_focus_phase') return (await db.query('select * from public.next_focus_phase($1)',[body.p_id])).rows[0];
           if(url.pathname==='/rest/v1/rpc/transition_focus') {
@@ -92,7 +96,7 @@ const rows=()=>serial(async()=>(await db.query('select * from public.focus_sessi
 async function backdateRunning(minutes){await serial(async()=>{
   // Test-only clock fixture; production transitions themselves use the real trigger/RPC.
   await db.exec('alter table public.focus_sessions disable trigger focus_state_guard');
-  try{await db.query("update public.focus_sessions set resumed_at=clock_timestamp()-($1 * interval '1 minute') where ended_at is null and focus_status='running'",[minutes]);}
+  try{await db.query("update public.focus_sessions set resumed_at=clock_timestamp()-($1 * interval '1 minute') where ended_at is null and focus_status='running'",[minutes]);await db.exec('update public.focus_segments s set started_at=f.resumed_at from public.focus_sessions f where s.session_id=f.id and s.ended_at is null');}
   finally{await db.exec('alter table public.focus_sessions enable trigger focus_state_guard');}
 });}
 async function waitFor(predicate,message){for(let i=0;i<100;i++){if(await predicate())return;await new Promise(r=>setTimeout(r,100));}throw new Error(message);}
@@ -164,6 +168,10 @@ try {
   await a.reload();
   const calendarTask=()=>serial(async()=>(await db.query("select * from public.schedules where title='Calendar captured task'")).rows[0]);
   assert.equal((await calendarTask()).scheduled_time,'14:00:00');assert.equal((await calendarTask()).estimated_minutes,90);assert.equal((await calendarTask()).deadline,'2026-12-31');
+  await b.goto(base+'/inbox?view=all');
+  const staleCard=b.locator('li').filter({has:b.getByRole('heading',{name:'Calendar captured task',exact:true})});
+  await staleCard.getByText('Edit, reschedule or remove',{exact:true}).click();
+  await staleCard.getByLabel('Title',{exact:true}).fill('Unsaved draft stays');
   await a.setViewportSize({width:1200,height:900});
   const timeline=a.getByLabel(`Timeline ${today}`,{exact:true});
   async function dropBlock(kind,minute){
@@ -174,6 +182,10 @@ try {
     },{id:task.id,kind,minute});
   }
   await dropBlock('move',900);await waitFor(async()=>(await calendarTask()).scheduled_time==='15:00:00','Calendar drag did not persist');
+  await staleCard.getByRole('button',{name:'Save changes',exact:true}).click();
+  await staleCard.getByRole('alert').filter({hasText:'another device'}).waitFor();
+  assert.equal(await staleCard.getByLabel('Title',{exact:true}).inputValue(),'Unsaved draft stays','Conflict erased draft');
+  assert.equal((await calendarTask()).title,'Calendar captured task','Stale edit silently overwrote task');
   await a.reload();await dropBlock('resize',1020);await waitFor(async()=>(await calendarTask()).estimated_minutes===120,'Calendar resize did not persist');
   await a.reload();await a.setViewportSize({width:390,height:844});
   await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
@@ -187,7 +199,44 @@ try {
   await moveBack.getByLabel('Planned date').fill('');await moveBack.getByLabel('Start time').fill('');
   await moveBack.getByRole('button',{name:'Save time block'}).click();
   await waitFor(async()=>(await calendarTask()).scheduled_date===null,'Return to Inbox failed');
+  // Complete the entire daily loop with an exact 60m estimate / 90m measured focus.
+  await a.reload();await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
+  const reschedule=a.getByRole('heading',{name:'Arrange: Calendar captured task'}).locator('..');
+  await reschedule.getByLabel('Planned date').fill(today);await reschedule.getByLabel('Start time').fill('14:00');
+  await reschedule.getByRole('button',{name:'Save time block'}).click();await waitFor(async()=>(await calendarTask()).scheduled_date===today,'Replan failed');
+  await a.getByRole('link',{name:'week',exact:true}).click();
+  await a.getByRole('region',{name:'week time blocking'}).waitFor();
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile week overflow');
+  await a.screenshot({path:'/tmp/focus-v1-calendar-390.png',fullPage:true});
+  await a.goto(base+'/today');
+  const taskCard=a.locator('li').filter({has:a.getByRole('heading',{name:'Calendar captured task',exact:true})});
+  await taskCard.getByRole('combobox',{name:'Mode',exact:true}).selectOption('countdown');
+  await taskCard.getByRole('spinbutton',{name:'Countdown minutes'}).fill('90');
+  await taskCard.getByRole('button',{name:'Start focus',exact:true}).click();await a.getByRole('button',{name:'Pause focus',exact:true}).waitFor();
+  await a.getByRole('button',{name:'Pause focus',exact:true}).click();await a.getByRole('button',{name:'Resume focus',exact:true}).waitFor();
+  await a.getByRole('button',{name:'Resume focus',exact:true}).click();await a.getByRole('button',{name:'Pause focus',exact:true}).waitFor();
+  await backdateRunning(91);await a.reload();
+  await waitFor(async()=>{const task=await calendarTask();return(await rows()).some(s=>s.schedule_id===task.id&&s.duration_sec===5400);},'Exact task actual missing');
+  await a.reload();await taskCard.getByRole('button',{name:'✓ Complete',exact:true}).click();
+  await waitFor(async()=>(await calendarTask()).is_done,'Task completion missing');
+  await a.reload();assert.match(await taskCard.innerText(),/\+30m difference/);
+  await a.goto(base+'/review');
+  const reportTask=a.getByRole('heading',{name:'Calendar captured task · completed',exact:true}).locator('..');
+  await reportTask.waitFor();assert.match(await reportTask.innerText(),/60m planned · 90m actual · \+30m difference/);
+  assert.match(await a.getByRole('heading',{name:'Planning accuracy and adjustments'}).locator('..').innerText(),/66\.7%/);
+  await a.getByRole('link',{name:'30 days',exact:true}).click();await a.getByRole('heading',{name:'Daily focus and completion trend'}).waitFor();
+  await a.getByLabel('From',{exact:true}).fill(today);await a.getByLabel('To',{exact:true}).fill(today);await a.getByRole('button',{name:'Update range'}).click();
+  await a.getByRole('heading',{name:'Task estimates and actuals'}).waitFor();
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile review overflow');
+  await a.screenshot({path:'/tmp/focus-v1-review-390.png',fullPage:true});
+  const exported=await first.request.get(base+'/history/export');assert.equal(exported.status(),200);const csv=await exported.text();assert.match(csv,/\"break_seconds\",\"phase\"/);assert.match(csv,/\"5400\",\"completed\"/);
+  await a.getByRole('link',{name:'Adjust your next plan →'}).click();
+  const quick=a.getByRole('heading',{name:'Quick add',exact:true}).locator('..').locator('form');
+  await quick.getByLabel('Title',{exact:true}).fill('Next week adjustment');
+  await quick.getByLabel('Date (optional)',{exact:true}).fill(new Date(Date.parse(today)+7*86400000).toISOString().slice(0,10));
+  await quick.getByRole('button',{name:'Add plan',exact:true}).click();
+  await waitFor(async()=>serial(async()=>(await db.query("select count(*)::int as n from public.schedules where title='Next week adjustment'")).rows[0].n===1),'Future adjustment missing');
   assert.deepEqual(errors,[],'No browser runtime errors');
-  console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls.');
+  console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));const page=browser?.contexts()[0]?.pages()[0];if(page)console.error((await page.locator('body').innerText()).slice(-6000));throw error;}
 finally {await browser?.close();app.kill('SIGTERM');await new Promise(resolve=>server.close(resolve));await queue;await db.close();}

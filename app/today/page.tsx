@@ -1,7 +1,7 @@
+import { readAnalytics } from '@/lib/analytics-report';
 import Link from 'next/link';
 import { planningContext, planningData } from '@/lib/planning-data';
-import { addDays, dayKey, plannedMinutes, sortPlans } from '@/lib/planning';
-import { readAllRows } from '@/lib/paginated-query';
+import { addDays, plannedMinutes, sortPlans } from '@/lib/planning';
 import { PlanForm } from '@/components/plan-form';
 import { PlanCard } from '@/components/plan-card';
 import { ReflectionForm } from '@/components/planning-forms';
@@ -18,19 +18,21 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const live = schedules.filter(item => !item.deleted_at);
   const plans = sortPlans(live.filter(item => item.scheduled_date === today));
   const overdue = sortPlans(live.filter(item => item.scheduled_date && item.scheduled_date < today && !item.is_done));
-  const sessions = await readAllRows<{ id: string; schedule_id: string | null; started_at: string; ended_at: string | null; duration_sec: number | null }>((from,to) => supabase.from('focus_sessions')
-    .select('id,schedule_id,started_at,ended_at,duration_sec').eq('user_id',user.id).order('id').range(from,to));
+  const {data: taskTotals,error:totalsError}=await supabase.rpc('task_focus_totals',{p_ids:schedules.map(item=>item.id)});
+  if(totalsError)throw totalsError;
+  const taskSeconds=new Map<string,number>((taskTotals??[]).map((item:{schedule_id:string;seconds:number})=>[item.schedule_id,Number(item.seconds)]));
+  const dayReport=await readAnalytics(supabase,today,today);
   const { data: running, error: runningError } = await supabase.from('focus_sessions').select(FOCUS_COLUMNS).eq('user_id',user.id).is('ended_at',null).maybeSingle();
   if (runningError) throw runningError;
   const active = running as FocusSession | null;
   const { data: lastPhase } = await supabase.from('focus_sessions').select(FOCUS_COLUMNS).eq('user_id',user.id).order('started_at',{ascending:false}).limit(1).maybeSingle();
   const activePlan = active ? live.find(plan => plan.id === active.schedule_id) : null;
-  const focused = sessions.filter(item => dayKey(new Date(item.started_at), zone) === today).reduce((sum,item) => sum + (item.duration_sec ?? 0),0) / 60;
+  const focused=Number(dayReport.days[0]?.focus_seconds??0)/60;
   const estimated = plannedMinutes(plans);
   const withBreaks = plannedMinutes(plans, 5);
   const { data: reflection, error } = await supabase.from('daily_reflections').select('note').eq('user_id',user.id).eq('day',today).maybeSingle();
   if (error) throw error;
-  const actual = (id: string) => sessions.filter(session => session.schedule_id === id).reduce((sum,item) => sum + (item.duration_sec ?? 0),0) / 60;
+  const actual=(id:string)=>taskSeconds.has(id)?taskSeconds.get(id)!/60:undefined;
   return <main className="mx-auto max-w-5xl px-4 py-10">
     <h1 className="text-3xl font-bold">Today</h1>
     <p className="mt-2 text-slate-600">{today} · {zone} · One step at a time.</p>
@@ -40,6 +42,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       <div className="rounded-lg border bg-white p-4"><p className="text-sm text-slate-500">Focused today</p><p className="text-2xl font-semibold">{Math.floor(focused)}m{target ? ` / ${target}m` : ''}</p><Link href="/dashboard" className="text-sm underline">Manage focus goal</Link></div>
       <div className="rounded-lg border bg-white p-4"><p className="text-sm text-slate-500">Remaining planned work</p><p className="text-2xl font-semibold">{estimated}m</p><p className="text-xs text-slate-500">{withBreaks}m with 5-minute buffers</p></div>
     </div>
+    <p className="mb-4 text-sm">Today: {dayReport.days[0]?.planned_minutes===null?'no estimates':`${dayReport.days[0]?.planned_minutes ?? 0}m total planned`} · {Math.floor(focused)}m actual focus · {Math.floor(Number(dayReport.days[0]?.break_seconds??0)/60)}m breaks. <Link href="/review" className="underline">Compare plan and actual →</Link></p>
     {estimated > 480 && <p role="status" className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900">More than 8 hours are planned. Consider moving a few items or leaving room for breaks.</p>}
     {!active && lastPhase && <FocusNext key={lastPhase.id} session={lastPhase as FocusSession} />}
     {active && <section className="mb-6 rounded-lg border bg-white p-5">

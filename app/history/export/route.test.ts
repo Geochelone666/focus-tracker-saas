@@ -57,7 +57,7 @@ describe("session CSV export", () => {
 
   it("returns a header-only download for empty history", async () => {
     const response = await GET();
-    expect(await response.text()).toBe('"started_at","ended_at","duration_seconds","status","note"\r\n');
+    expect(await response.text()).toBe('"started_at","ended_at","duration_seconds","status","note","break_seconds","phase","task_id","project_id","skill_id"\r\n');
   });
 
   it("does not return a partial download when a later batch fails", async () => {

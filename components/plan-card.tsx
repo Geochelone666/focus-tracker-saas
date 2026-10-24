@@ -17,6 +17,7 @@ export function PlanCard({ plan, projects, skills, returnTo = '/today', actualMi
         <h3 className={`break-words font-semibold ${plan.is_done ? 'text-slate-500 line-through' : ''}`}>{plan.title}</h3>
         <p className="mt-1 text-sm text-slate-600">{plan.scheduled_date ?? 'Inbox'} · {plan.scheduled_time?.slice(0,5) ?? 'Any time'} · {plan.is_done ? 'Completed' : `${plan.priority} priority`}{plan.series_id ? ' · Repeats' : ''}</p>
         {(plan.estimated_minutes || actualMinutes !== undefined) && <p className="mt-1 text-sm text-slate-600">{plan.estimated_minutes ? `${plan.estimated_minutes}m planned` : ''}{plan.estimated_minutes && actualMinutes !== undefined ? ' · ' : ''}{actualMinutes !== undefined ? `${Math.floor(actualMinutes)}m focused` : ''}</p>}
+        {plan.estimated_minutes!==null && actualMinutes!==undefined && <p className="mt-1 text-xs">{actualMinutes-plan.estimated_minutes>0?'+':''}{Number((actualMinutes-plan.estimated_minutes).toFixed(1))}m difference</p>}
         {plan.deadline && <p className="mt-1 text-sm">Deadline: {plan.deadline}</p>}
         {(project || plan.energy) && <p className="mt-1 text-sm text-slate-500">{project?.name}{project && plan.energy ? ' · ' : ''}{plan.energy ? `${plan.energy} energy` : ''}</p>}
         {plan.notes && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-600">{plan.notes}</p>}
