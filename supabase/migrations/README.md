@@ -46,3 +46,7 @@ Migrations are applied in file-name order, so `20260930002658_enforce_session_sk
 ## Devices and AI connections (20261023000000)
 
 Apply `20261023000000_ai_integrations.sql` after all existing migrations, including `20261022000000_restore_session_schedule_ownership.sql` and before deploying the integration UI. It is transactional and rerunnable. It adds hashed expiring/revocable integration keys, an owner-visible write log, schedule revision timestamps, and the narrow anonymous `integration_api` RPC. Existing owner RLS remains in place. No service-role key or Realtime publication is needed. See [AI connection instructions](../../docs/ai-connections.md).
+
+## Phone reminders (20261023010000)
+
+Apply `20261023010000_mobile_push.sql` after the AI integration migration. It is transactional/rerunnable and adds owner-isolated web/native device registrations, a server-only delivery queue, bounded per-account device count, and service-role-only lease/check/cleanup functions. It does not change existing schedule RLS or expose device management to AI keys. Configure VAPID server keys and the optional hosted `../mobile-push-cron.sql` scheduler separately; see [phone notification deployment](../../docs/phone-notifications.md). The committed `../tests/mobile_push.sql` regression script runs against a disposable database through `npm test`.

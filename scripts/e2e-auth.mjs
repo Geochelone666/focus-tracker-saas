@@ -7,7 +7,7 @@ import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 
 const base = process.env.BASE_URL || 'http://localhost:3000';
-const protectedPaths = ['/today', '/dashboard', '/calendar', '/inbox', '/projects', '/skills', '/history', '/review', '/settings', '/history/export'];
+const protectedPaths = ['/today', '/dashboard', '/calendar', '/inbox', '/projects', '/skills', '/history', '/review', '/settings', '/settings/notifications', '/plans/11111111-1111-4111-8111-111111111111', '/history/export'];
 const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined });
 const errors = [];
 try {

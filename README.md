@@ -86,3 +86,7 @@ The current full development-dependency audit still reports seven high-severity 
 ## Devices and AI clients
 
 The integration update requires migration **20261023000000** before deployment. Settings → Manage AI connections lets you create expiring, revocable read-only or schedule-editing keys. REST/OpenAPI and stateless MCP endpoints share owner isolation, revision checks, and a write log. Visible idle pages refresh across devices. See [setup, supported transports, limitations, and examples](docs/ai-connections.md).
+
+## Installable phone app and background notifications
+
+Use the installed web app on iOS/iPadOS 16.4+ or supported Android browsers; developer accounts are not required. Phone notification permissions are opt-in, reminders run on the server, and the app can be closed. This release requires the mobile push migration plus VAPID/server environment variables and a minute scheduler **before enabling production reminders**. Follow [phone setup and limitations](docs/phone-notifications.md). The optional [native Expo client](mobile/README.md) is source for future signed builds; JavaScript exports are not installable APK/IPA packages.

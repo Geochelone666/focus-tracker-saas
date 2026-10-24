@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — phone notifications
+
+- Installable web app with iPhone/Android installation guidance, opt-in web push, per-device advance reminders, tests and remote disconnection. No developer accounts required for this path.
+- Server reminders with private lock-screen text, owner checks, leases, retries, expired-subscription cleanup, timezone/DST rules and tap-to-plan login navigation. Requires the new migration, server configuration and minute scheduler.
+- Optional Expo native source and iOS/Android bundle checks; signed packages and store delivery require separate credentials and physical-device validation.
+
 ## 2026-10-22
 
 - Security (database): new migration `20261022000000_restore_session_schedule_ownership.sql`. Migrations run in file-name order, so `20260930002658` ran after `009` and dropped its check that a session's linked schedule belongs to the user. Apply it to every deployment.
