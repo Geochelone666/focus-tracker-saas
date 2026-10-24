@@ -33,8 +33,13 @@ export async function sendReminders(client:SupabaseClient,fetcher:typeof fetch=f
  let webAccepted=0;
  const webJobs=ready.filter(job=>job.web_subscription);
  for(let start=0;start<webJobs.length;start+=8)await Promise.all(webJobs.slice(start,start+8).map(async job=>{
-  try{await sendWebPush(job.web_subscription,job.schedule_id);const update=await client.from('push_deliveries').update({state:'sent',error_code:null,receipt_checked_at:new Date().toISOString()}).eq('id',job.delivery_id).eq('lease_id',job.lease_id).eq('state','sending');if(update.error)throw new Error('Could not persist push');webAccepted++;}
-  catch(error){const status=(error as {statusCode?:number}).statusCode;const gone=status===404||status===410;await settle(client,job,{status:'error',details:{error:gone?'SubscriptionGone':status===429?'ProviderUnavailable':'NetworkError'}});if(gone)await client.from('push_devices').update({enabled:false}).eq('web_subscription->>endpoint',(job.web_subscription as {endpoint:string}).endpoint);}
+  // Only provider failures should transition to retry. A successful push whose DB
+  // acknowledgement fails may already be visible on a phone; do not actively requeue it.
+  try{await sendWebPush(job.web_subscription,job.schedule_id);}
+  catch(error){const status=(error as {statusCode?:number}).statusCode;const gone=status===404||status===410;await settle(client,job,{status:'error',details:{error:gone?'SubscriptionGone':status===429?'ProviderUnavailable':'NetworkError'}});if(gone)await client.from('push_devices').update({enabled:false}).eq('web_subscription->>endpoint',(job.web_subscription as {endpoint:string}).endpoint);return;}
+  const update=await client.from('push_deliveries').update({state:'sent',error_code:null,receipt_checked_at:new Date().toISOString()}).eq('id',job.delivery_id).eq('lease_id',job.lease_id).eq('state','sending');
+  if(update.error)throw new Error('Could not persist accepted web push');
+  webAccepted++;
  }));
  const expoReady=ready.filter(job=>!job.web_subscription);
  if(!expoReady.length)return {claimed:jobs.length,accepted:webAccepted};
