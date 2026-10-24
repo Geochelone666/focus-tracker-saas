@@ -1,6 +1,5 @@
 import { timezone as normalizeTimezone } from "@/lib/planning";
-import { readAllRows } from "@/lib/paginated-query";
-import { buildAnalyticsDays, buildSkillStats, formatDuration, getMidnightInTimeZone } from "@/lib/analytics";
+import { buildAnalyticsDays, formatDuration } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { addSkill, deleteSkill, toggleSkill } from "@/app/skills/actions";
 import { createClient } from "@/supabase/server";
@@ -35,17 +34,13 @@ export default async function SkillsPage({
 
   const typedSkills = (skills ?? []) as SkillRow[];
 
-  const sessions = await readAllRows((from, to) => supabase
-    .from("focus_sessions")
-    .select("skill_id, duration_sec, started_at")
-    .eq("user_id", user.id)
-    .order("id")
-    .range(from, to));
   const { data: profile, error: profileError } = await supabase.from('profiles').select('timezone').eq('user_id',user.id).maybeSingle();
   if (profileError) throw profileError;
   const timezone = normalizeTimezone(profile?.timezone);
-  const weekStart = getMidnightInTimeZone(buildAnalyticsDays(new Date(), timezone)[0].date, timezone);
-  const stats = buildSkillStats(sessions ?? [], weekStart);
+  const today=buildAnalyticsDays(new Date(),timezone).at(-1)!.key;
+  const {data:rows,error:statsError}=await supabase.rpc('skill_focus_totals',{p_from:buildAnalyticsDays(new Date(),timezone)[0].key,p_to:today});
+  if(statsError)throw statsError;
+  const stats=new Map<string,{totalSec:number;sessionCount:number;weekSec:number}>((rows??[]).map((row:{skill_id:string;total_sec:number;session_count:number;week_sec:number})=>[row.skill_id,{totalSec:Number(row.total_sec??0),sessionCount:Number(row.session_count),weekSec:Number(row.week_sec)}]));
   const maxTotalSec = Math.max(0, ...typedSkills.map((skill) => stats.get(skill.id)?.totalSec ?? 0));
 
   return (

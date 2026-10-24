@@ -36,4 +36,13 @@
 - Separate task deadlines from execution times and add exact-revision web saves, including future unfinished recurring tasks.
 - Validate DST gaps and display repeated/overnight blocks using account timezone semantics.
 - Requires `20261025020000_time_blocks.sql`; preserve user data and additive fields on rollback.
+
+### Focus V1 batch 4
+
+- Record effective intervals and aggregate completed focus/break time at account-local day boundaries, including DST and cross-month sessions.
+- Add 7/30/custom planned-versus-actual review, task differences, completion trends, estimate fit, deferral/overdue indicators and separate project/skill identities.
+- Replace raw history downloads with database aggregates; paginate report tasks; extend CSV with break/phase/link fields.
+- Preserve unsaved task drafts and revision snapshots during revalidation; add a workspace loading state.
+- Requires `20261025030000_planned_actual.sql`; historical missing interval/completion data remains explicitly unknown.
+- Requires `20261025020000_time_blocks.sql`; preserve user data and additive fields on rollback.
 - Requires additive migration `20261025010000_focus_cycles.sql`; live Supabase remains unverified.

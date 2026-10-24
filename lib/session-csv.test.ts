@@ -50,3 +50,8 @@ describe("effective focus CSV",()=>{
   expect(buildSessionCsv([{started_at:"2026-10-24T12:00:00Z",ended_at:"2026-10-24T12:05:00Z",duration_sec:0,session_kind:"short_break",focus_status:"completed",note:null}])).toContain('"0","completed"');
  });
 });
+
+it('extends CSV without changing the first five columns and separates break seconds',()=>{
+ const csv=buildSessionCsv([{started_at:'2026-10-24T12:00:00Z',ended_at:'2026-10-24T12:05:00Z',duration_sec:0,break_duration_sec:300,session_kind:'short_break',focus_status:'completed',note:null}],0,true);
+ expect(csv).toContain('"note","break_seconds","phase","task_id","project_id","skill_id"');expect(csv).toContain('"0","completed","","300","short_break"');
+});
