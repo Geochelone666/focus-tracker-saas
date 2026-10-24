@@ -101,7 +101,7 @@ end $$;
 -- Regression: an account may create a plan only five minutes before it starts
 -- while the device asks for a ten-minute lead. The previously expired lead
 -- cannot silently suppress an otherwise upcoming reminder.
-do $ declare j record; n integer; begin
+do $$ declare j record; n integer; begin
  update public.push_devices set enabled=true,last_seen_at='2026-10-26T16:15:01Z'
   where transport='expo';
  update public.schedules set scheduled_date='2026-10-26',scheduled_time='12:20',
@@ -118,5 +118,5 @@ do $ declare j record; n integer; begin
  if n<>0 then raise exception 'Short-notice reminder duplicated'; end if;
  select count(*) into n from public.claim_push_reminders('2026-10-26T16:22:00Z',100);
  if n<>0 then raise exception 'Stale reminder was claimed after plan start'; end if;
-end $;
+end $$;
 rollback;
