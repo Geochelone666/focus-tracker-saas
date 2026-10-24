@@ -1,6 +1,6 @@
 # Time blocking and task revisions — batch 3
 
-Branch `feat/time-blocking-v1` is stacked on `feat/focus-cycles-v1`. Apply `20261024020000_time_blocks.sql` after all preceding migrations before deploying. It adds an optional task `deadline` and a deferral counter; it reuses `scheduled_date`, `scheduled_time`, `estimated_minutes` and existing task/project/priority/series models for blocks.
+Branch `feat/time-blocking-v1` is stacked on `feat/focus-cycles-v1`. Apply `20261025020000_time_blocks.sql` after all preceding migrations before deploying. It adds an optional task `deadline` and a deferral counter; it reuses `scheduled_date`, `scheduled_time`, `estimated_minutes` and existing task/project/priority/series models for blocks.
 
 Calendar offers day/week/month. The day/week grid has a 24-hour wall-clock axis, Inbox drag/drop, block movement and a draggable Resize handle. Choosing a task opens the same operations as a form above the grid, available on touch and keyboard. Drag/resize changes one occurrence; the form can change this and future unfinished occurrences. All edits preserve the deadline unless it is explicitly edited in the task form. Clear both planned date/time or use Move to Inbox to unschedule. Overlaps display warnings and remain permitted; adjacent endpoints are not conflicts. Overnight blocks continue into the next visible day. Unestimated or untimed tasks need scheduling through the editor before they form a timed block.
 

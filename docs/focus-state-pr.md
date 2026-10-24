@@ -10,7 +10,7 @@ Validation:
 - `scripts/e2e-focus.mjs`: real Next Server Actions against migrated PGlite; concurrent starts, pause/reload, simulated ten-minute pause, stale-device conflict, resume/finish/outcome, capped once-only 25-minute countdown, Today task association, abandonment, 390px layout. Added to CI.
 - Existing auth-guard Chromium E2E: passed (10 protected routes, forged cookie, unreachable auth feedback, 390px).
 
-Migration: apply `20261024000000_focus_state.sql` after all previous migrations, before deploying the application. It is additive, transactional and rerunnable; completed legacy durations and original starts remain intact. Review the maintenance rollback in `docs/focus-state.md`; finish/abandon active sessions before downgrading to the old timer. No user records are deleted.
+Migration: apply `20261025000000_focus_state.sql` after all previous migrations, before deploying the application. It is additive, transactional and rerunnable; completed legacy durations and original starts remain intact. Review the maintenance rollback in `docs/focus-state.md`; finish/abandon active sessions before downgrading to the old timer. No user records are deleted.
 
 Risks and limits: live Supabase/PostgREST, production migration state, hosted authentication, physical multi-device synchronization and deployment are unverified. Fixture authentication is stubbed. Focus controls refresh eventually, while DB writes are serialized. Expired countdown persistence happens when a client runs/returns; no background worker exists. Break cycles, full Focus Mode UI, day/week time blocking, web task conflict handling and planned/actual date ranges remain in the ordered delivery queue (`docs/v1-audit.md`).
 

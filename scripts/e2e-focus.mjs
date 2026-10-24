@@ -12,7 +12,7 @@ const fixturePort = Number(process.env.FOCUS_FIXTURE_PORT || 54329);
 const appPort = Number(process.env.FOCUS_APP_PORT || 3100);
 const base = `http://localhost:${appPort}`;
 const db = new PGlite({parsers:{1184:value=>value,1082:value=>value}});
-await db.exec(`create role anon; create role authenticated; create schema auth;
+await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
 create table auth.users(id uuid primary key,email text);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
 grant usage on schema auth,public to anon,authenticated;

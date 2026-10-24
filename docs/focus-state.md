@@ -1,6 +1,6 @@
 # Focus state V1 — batch 1
 
-Apply `supabase/migrations/20261024000000_focus_state.sql` after **all** earlier migrations, including `20261023000000_ai_integrations.sql`, before deploying the application. Apply migrations in filename order. Do not edit or reapply only the old policy migrations. Use a test project first; review and apply production migrations separately with authorization.
+Apply `supabase/migrations/20261025000000_focus_state.sql` after **all** earlier migrations, including `20261023000000_ai_integrations.sql`, before deploying the application. Apply migrations in filename order. Do not edit or reapply only the old policy migrations. Use a test project first; review and apply production migrations separately with authorization.
 
 The additive, transactional migration preserves legacy ids, timestamps, links, notes and `duration_sec`. Legacy open sessions become running count-up sessions, using their original start; completed sessions keep their durations. The existing unique partial index still covers both running and paused rows because both have `ended_at IS NULL`. Deployment does not auto-close old sessions; review/finish or abandon them explicitly.
 
@@ -33,7 +33,7 @@ Hosted verification still required: real email authentication, real PostgREST er
 
 ## Batch 2 — breaks and cycles
 
-Apply `20261024010000_focus_cycles.sql` after the state migration. Each focus/short-break/long-break is a retained row with its own state, timestamps and expected revision. The existing partial unique index includes breaks, so paused breaks also prevent concurrent focus. `previous_session_id` is unique and `next_focus_phase` locks its owner-scoped predecessor, preventing duplicate next phases. Start each phase explicitly; completion never silently starts another timer. Configure 1–12 rounds, short and long breaks and the long-break cadence before starting. The Focus screen also accepts optional task/project/skill links; project identity is snapshotted on new sessions. Legacy project identity can only be inferred from the task at upgrade time.
+Apply `20261025010000_focus_cycles.sql` after the state migration. Each focus/short-break/long-break is a retained row with its own state, timestamps and expected revision. The existing partial unique index includes breaks, so paused breaks also prevent concurrent focus. `previous_session_id` is unique and `next_focus_phase` locks its owner-scoped predecessor, preventing duplicate next phases. Start each phase explicitly; completion never silently starts another timer. Configure 1–12 rounds, short and long breaks and the long-break cadence before starting. The Focus screen also accepts optional task/project/skill links; project identity is snapshotted on new sessions. Legacy project identity can only be inferred from the task at upgrade time.
 
 Completed focus remains in `duration_sec`; completed breaks use `break_duration_sec` and contribute zero focus. History and CSV now use effective focus duration rather than wall-clock subtraction. Sound and browser notifications are off by default. Sound requires enabling an AudioContext through a user gesture in the current session; notifications require an explicit permission request. Both can be disabled immediately. Unsupported/denied browser capabilities leave timers usable.
 

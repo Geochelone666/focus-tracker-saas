@@ -4,10 +4,15 @@
 
 - Add persistent count-up/countdown timing, pause/resume, revision-checked atomic focus transitions and retained zero-credit abandonment.
 - Share focus controls on Today and Dashboard, with outcome notes, silent countdown completion and refresh recovery.
-- Preserve completed history and owner/AI boundaries in additive migration `20261024000000_focus_state.sql`; deploy it before application changes.
+- Preserve completed history and owner/AI boundaries in additive migration `20261025000000_focus_state.sql`; deploy it before application changes.
 - Add focus SQL, unit/action and authenticated fixture-backed browser regressions, plus the V1 audit/delivery queue and rollback instructions.
 - Break cycles and the complete capture-to-review flow remain outstanding; no production verification is claimed.
 
+## Unreleased — phone notifications
+
+- Installable web app with iPhone/Android installation guidance, opt-in web push, per-device advance reminders, tests and remote disconnection. No developer accounts required for this path.
+- Server reminders with private lock-screen text, owner checks, leases, retries, expired-subscription cleanup, timezone/DST rules and tap-to-plan login navigation. Requires the new migration, server configuration and minute scheduler.
+- Optional Expo native source and iOS/Android bundle checks; signed packages and store delivery require separate credentials and physical-device validation.
 
 ## 2026-10-22
 
@@ -23,11 +28,12 @@
 
 - Separate short/long breaks and bounded configurable focus cycles, with duplicate-safe next phases.
 - Add optional project/task links, explicit sound/notification opt-in and effective-time history/CSV.
-- Requires additive migration `20261024010000_focus_cycles.sql`; live Supabase remains unverified.
+- Requires additive migration `20261025010000_focus_cycles.sql`; live Supabase remains unverified.
 
 ### Focus V1 batch 3
 
 - Add day/week time blocking, drag/drop, resize, overlap warnings and mobile/keyboard scheduling.
 - Separate task deadlines from execution times and add exact-revision web saves, including future unfinished recurring tasks.
 - Validate DST gaps and display repeated/overnight blocks using account timezone semantics.
-- Requires `20261024020000_time_blocks.sql`; preserve user data and additive fields on rollback.
+- Requires `20261025020000_time_blocks.sql`; preserve user data and additive fields on rollback.
+- Requires additive migration `20261025010000_focus_cycles.sql`; live Supabase remains unverified.
