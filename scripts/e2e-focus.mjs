@@ -45,6 +45,7 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/next_focus_phase') return (await db.query('select * from public.next_focus_phase($1)',[body.p_id])).rows[0];
           if(url.pathname==='/rest/v1/rpc/transition_focus') {
             const result=await db.query('select * from public.transition_focus($1,$2,$3,$4,$5)',[body.p_id,body.p_revision,body.p_action,body.p_note,body.p_skill ?? null]);
             return result.rows[0];
@@ -126,6 +127,11 @@ try {
   await waitFor(async()=>(await rows()).some(s=>s.focus_mode==='countdown'&&s.duration_sec===1500),'Expired countdown must save capped duration');
   await a.getByRole('button',{name:'Start Session',exact:true}).waitFor();await a.reload();
   assert.equal((await rows()).filter(s=>s.focus_mode==='countdown').length,1,'Reload never inserts another completion');
+  await a.getByRole('button',{name:'Start short break',exact:true}).click();
+  await a.getByRole('button',{name:'Pause break',exact:true}).waitFor();
+  await backdateRunning(6);await a.reload();
+  await waitFor(async()=>(await rows()).some(s=>s.session_kind==='short_break'&&s.break_duration_sec===300&&s.duration_sec===0),'Five-minute break must be separate');
+  await a.getByRole('heading',{name:'Cycle complete',exact:true}).waitFor();
   // Task entry point and mobile core controls use the same actions.
   await a.setViewportSize({width:390,height:844});await a.goto(base+'/today');
   await a.getByRole('button',{name:'Start focus',exact:true}).click();await a.getByRole('button',{name:'Pause focus',exact:true}).waitFor();
@@ -136,6 +142,6 @@ try {
   await a.getByRole('button',{name:'Abandon focus',exact:true}).click();
   await waitFor(async()=>(await rows()).some(s=>s.focus_status==='abandoned'&&s.duration_sec===0),'Abandon must retain zero-credit row');
   assert.deepEqual(errors,[],'No browser runtime errors');
-  console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, Today task link, abandon, 390px controls.');
+  console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, 390px controls.');
 } catch(error) {console.error(logs.slice(-10000));throw error;}
 finally {await browser?.close();app.kill('SIGTERM');await new Promise(resolve=>server.close(resolve));await queue;await db.close();}

@@ -66,6 +66,9 @@ export async function startSession(formData: FormData) {
   const message = "Couldn't start the session. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("startSession", message);
   let options;
+  let projectId;
+  try { projectId = validateOptionalSkillId(formData.get("project_id")); }
+  catch { redirect("/dashboard?error=Invalid%20project"); }
   try { options = focusOptions(formData); }
   catch { redirect("/dashboard?error=" + encodeURIComponent("Choose a valid mode and 1–1440 countdown minutes.")); }
   let skillId = await getOwnedSkillId(formData, supabase, user.id);
@@ -82,6 +85,7 @@ export async function startSession(formData: FormData) {
   try {
     const { error } = await supabase.from("focus_sessions").insert({
       ...options,
+      ...(projectId ? { project_id: projectId } : {}),
       user_id: user.id,
       ended_at: null,
       skill_id: skillId,

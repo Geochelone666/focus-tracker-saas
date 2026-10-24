@@ -40,3 +40,13 @@ describe("buildSessionCsv", () => {
       .toContain('"Deep work - 2h"');
   });
 });
+
+
+describe("effective focus CSV",()=>{
+ it("uses stored focus rather than wall time including pause",()=>{
+  expect(buildSessionCsv([{started_at:"2026-10-24T12:00:00Z",ended_at:"2026-10-24T12:11:00Z",duration_sec:60,focus_status:"completed",note:"done"}])).toContain('"60","completed"');
+ });
+ it("never exports break duration as focus",()=>{
+  expect(buildSessionCsv([{started_at:"2026-10-24T12:00:00Z",ended_at:"2026-10-24T12:05:00Z",duration_sec:0,session_kind:"short_break",focus_status:"completed",note:null}])).toContain('"0","completed"');
+ });
+});

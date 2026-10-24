@@ -14,6 +14,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
 import { cleanupDuplicateActiveSessions, startSession, updateDailyTarget } from "@/app/dashboard/actions";
 import { pickLatestActiveSession } from "@/lib/active-session";
+import { FocusNext } from "@/components/focus-next";
 import { FocusControls } from "@/components/focus-controls";
 import { FocusOptions } from "@/components/focus-options";
 import { FOCUS_COLUMNS, type FocusSession } from "@/lib/focus-state";
@@ -87,7 +88,7 @@ export default async function DashboardPage({
 
   const { data: sessions } = await supabase
     .from("focus_sessions")
-    .select("id, started_at, ended_at, duration_sec, note, skill_id")
+    .select(`${FOCUS_COLUMNS},ended_at,duration_sec,note`)
     .eq("user_id", user.id)
     .order("started_at", { ascending: false })
     .limit(20);
@@ -100,6 +101,8 @@ export default async function DashboardPage({
     .eq("user_id", user.id)
     .order("name", { ascending: true });
 
+  const { data: projects } = await supabase.from('projects').select('id,name').eq('user_id',user.id).order('name');
+  const { data: taskChoices } = await supabase.from('schedules').select('id,title').eq('user_id',user.id).eq('is_done',false).is('deleted_at',null).order('id').limit(100);
   const analyticsDays = buildAnalyticsDays(new Date(), timezone);
   const today = analyticsDays[analyticsDays.length - 1].date;
   const tomorrow = new Date(today);
@@ -128,7 +131,7 @@ export default async function DashboardPage({
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
-      <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+      <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Focus</h1>
       <p className="mb-6 break-words text-slate-600">You are logged in as {user.email}.</p>
 
       {error && (
@@ -144,10 +147,13 @@ export default async function DashboardPage({
           <p role="alert" className="mt-4 text-red-800">Couldn&apos;t load the running session. Please refresh to try again.</p>
         ) : (
           <>
+            {!latest && sessions?.[0] && <FocusNext key={sessions[0].id} session={sessions[0] as unknown as FocusSession} />}
             {latest && <FocusControls key={latest.id} session={latest} skills={skills ?? []} observedAt={Date.now()} />}
             <div className="mt-4 flex flex-wrap gap-3">
               {activeState === "none" && <form action={startSession} className="flex min-w-0 flex-wrap items-center gap-3">
                 <FocusOptions />
+                <label className="text-sm">Task (optional)<select name="schedule_id" defaultValue="" className="ml-2 max-w-full rounded border p-2"><option value="">No task</option>{taskChoices?.map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
+                <label className="text-sm">Project (optional)<select name="project_id" defaultValue="" className="ml-2 max-w-full rounded border p-2"><option value="">Use task project</option>{projects?.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
                 <label htmlFor="start-skill" className="text-sm text-slate-700">Skill (optional)</label>
                 <select
                   id="start-skill"
