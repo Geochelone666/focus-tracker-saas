@@ -1,0 +1,32 @@
+{
+  "name": "focus-tracker-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "typecheck": "tsc --noEmit",
+    "check": "expo install --check",
+    "export:check": "expo export --platform all --output-dir dist"
+  },
+  "dependencies": {
+    "expo": "54.0.38",
+    "expo-constants": "~18.0.14",
+    "expo-crypto": "~15.0.9",
+    "expo-device": "~8.0.10",
+    "expo-notifications": "~0.32.17",
+    "expo-secure-store": "~15.0.8",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-url-polyfill": "^2.0.0",
+    "@supabase/supabase-js": "2.50.5"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "postcss": "8.5.31"
+  }
+}

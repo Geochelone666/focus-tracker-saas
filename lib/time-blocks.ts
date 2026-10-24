@@ -14,7 +14,8 @@ export function taskInterval(task: Schedule,zone:string) {
   if(!task.scheduled_date||!task.scheduled_time||!task.estimated_minutes||task.deleted_at)return null;
   const starts=wallTimeInstants(task.scheduled_date,task.scheduled_time.slice(0,5),zone);
   if(!starts.length)return null;
-  return {start:starts[0],end:starts[0]+task.estimated_minutes*60000,ambiguous:starts.length>1};
+  const start=starts[starts.length-1];
+  return {start,end:start+task.estimated_minutes*60000,ambiguous:starts.length>1};
 }
 export function conflictingTasks(task:Schedule,others:Schedule[],zone:string) {
   const interval=taskInterval(task,zone);if(!interval)return [];

@@ -4,6 +4,6 @@ Intended base: `feat/time-blocking-v1`. Adds database aggregates for day/week/30
 
 A trusted trigger records effective intervals across pause/resume. Account-local midnight allocation handles DST and month boundaries. Legacy unrecorded time stays explicitly attributed to its start date; unknown completion dates are never invented. Task rows paginate 50 per report; custom ranges are bounded to 366 days. Unsaved task drafts retain their version snapshot and input through concurrent conflicts.
 
-Migration: `20261024030000_planned_actual.sql`, applied after every preceding migration. Additive, owner RLS, no new AI API/MCP access. Interval writes are restricted to the trigger. Non-destructive rollback is documented in `docs/planned-actual.md`.
+Migration: `20261025030000_planned_actual.sql`, applied after every preceding migration. Additive, owner RLS, no new AI API/MCP access. Interval writes are restricted to the trigger. Non-destructive rollback is documented in `docs/planned-actual.md`.
 
 Validation: 336 tests across 26 files including every SQL regression; typecheck/lint/build; Chromium complete capture → plan → focus/pause/resume → 90m completion against 60m estimate → +30m review → future adjustment, plus calendar, 390px, conflict and CSV checks. Clock advancement/drop events are automated local fixtures. Real Supabase, production deployment, physical devices and OS sound/notification delivery remain unverified.

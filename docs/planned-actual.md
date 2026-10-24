@@ -1,6 +1,6 @@
 # Planned versus actual — batch 4
 
-Apply `20261024030000_planned_actual.sql` last. Branch `feat/planned-actual-v1` is stacked on the time-blocking branch. No production credentials, service grants or deployment configuration are changed.
+Apply `20261025030000_planned_actual.sql` last. Branch `feat/planned-actual-v1` is stacked on the time-blocking branch. No production credentials, service grants or deployment configuration are changed.
 
 Effective intervals are recorded atomically by a narrowly scoped SECURITY DEFINER trigger on the already owner-protected focus table. Users can read their own intervals through RLS but cannot insert/update them. Pause closes an interval; resume opens one; completion closes it using the timing guard's exact millisecond delta. Abandoned sessions do not earn focus or break credit. The trigger has no caller-controlled SQL, no public execution grant, and a fixed empty search path.
 

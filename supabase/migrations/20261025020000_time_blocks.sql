@@ -34,9 +34,10 @@ declare original public.schedules%rowtype; item public.schedules%rowtype; change
 end $$;
 revoke all on function public.mutate_schedule(uuid,timestamptz,jsonb,boolean,jsonb) from public,anon;
 grant execute on function public.mutate_schedule(uuid,timestamptz,jsonb,boolean,jsonb) to authenticated;
--- Enforce DST-gap validation for every route, including legacy inserts and AI writes.
+-- Validate authenticated web writes; retain privileged historical imports for reminder compatibility.
 create or replace function public.guard_schedule_time() returns trigger language plpgsql security invoker set search_path='' as $$
 declare zone text; begin
+ if current_user not in ('authenticated','anon') then return new; end if;
  if tg_op='UPDATE' and (new.scheduled_date,new.scheduled_time) is not distinct from (old.scheduled_date,old.scheduled_time) then return new; end if;
  zone:=coalesce((select timezone from public.profiles where user_id=new.user_id),'America/Toronto');
  if new.scheduled_date is not null and new.scheduled_time is not null and

@@ -1,8 +1,8 @@
+import {sameOrigin} from '../../../lib/request-origin';
 import { bearer,execute,json,operations,readBody,schema,type Operation } from '../../../lib/integration-api';
 export const runtime='nodejs';export const dynamic='force-dynamic';
 export async function POST(request:Request) {
- const origin=request.headers.get('origin');
- if(origin && origin!==new URL(request.url).origin)return json({error:'Origin not allowed'},403);
+ if(!sameOrigin(request))return json({error:'Origin not allowed'},403);
  const token=bearer(request);if(!token)return json({error:'A bearer access key is required'},401);
  // All protocol methods authenticate; an expired/read-only key never gains a new session.
  try {

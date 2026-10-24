@@ -8,9 +8,10 @@ describe('time blocks and timezone boundaries',()=>{
   expect(taskInterval(a,'Asia/Shanghai')?.end).toBe(Date.parse('2026-10-24T07:30:00Z'));
   expect(conflictingTasks(a,[a,b,c],'Asia/Shanghai').map(t=>t.id)).toEqual(['b']);
  });
- it('rejects nonexistent times and chooses the first occurrence in a DST fold',()=>{
+ it('rejects nonexistent times and resolves folds consistently with server reminders',()=>{
   expect(wallTimeInstants('2026-03-08','02:30','America/Toronto')).toEqual([]);
   expect(wallTimeInstants('2026-11-01','01:30','America/Toronto')).toEqual([Date.parse('2026-11-01T05:30:00Z'),Date.parse('2026-11-01T06:30:00Z')]);
+  expect(taskInterval({...task('fold','01:30',30),scheduled_date:'2026-11-01'},'America/Toronto')?.start).toBe(Date.parse('2026-11-01T06:30:00Z'));
  });
  it('uses real elapsed duration across a DST jump',()=>{
   const interval=taskInterval({...task('a','01:30',90),scheduled_date:'2026-03-08'},'America/Toronto')!;
