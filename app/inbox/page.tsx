@@ -31,7 +31,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
       <section><h2 className="mb-3 font-semibold">{filtered.length} {view === 'trash' ? 'removed plans' : 'plans'}</h2>
         {filtered.length === 0 && <p className="text-slate-500">No plans match this view.</p>}
-        <ul className="space-y-3">{filtered.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/inbox" />)}</ul>
+        <ul className="space-y-3">{filtered.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/inbox" />)}</ul>
       </section>
       <section className="h-fit rounded-lg border bg-white p-5"><h2 className="mb-3 font-semibold">Capture a task</h2><PlanForm returnTo="/inbox" projects={projects.filter(p => !p.is_done)} skills={skills} /></section>
     </div>

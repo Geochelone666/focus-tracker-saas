@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ createClient: vi.fn(), revalidatePath: vi.fn(), insert: vi.fn(), update: vi.fn(), eq: vi.fn(), getUser: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createClient: vi.fn(), revalidatePath: vi.fn(), insert: vi.fn(), update: vi.fn(), eq: vi.fn(), getUser: vi.fn(), rpc: vi.fn() }));
 vi.mock('@/supabase/server', () => ({ createClient: mocks.createClient }));
 vi.mock('@/lib/calendar', () => import('../../lib/calendar'));
 vi.mock('@/lib/validation', () => import('../../lib/validation'));
@@ -7,15 +7,16 @@ vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('next/navigation', () => ({ redirect: (url: string) => { throw new Error('Redirect: ' + url); } }));
 import { addSchedule, toggleSchedule, updateSchedule } from './actions';
 const id = '11111111-1111-4111-8111-111111111111';
-function form() { const data = new FormData(); data.set('title', '周会'); data.set('scheduled_date', '2026-10-20'); return data; }
+function form() { const data = new FormData(); data.set('title', '周会');data.set('expected_updated_at','2026-10-20T12:00:00Z'); data.set('scheduled_date', '2026-10-20'); return data; }
 describe('schedule actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getUser.mockResolvedValue({ data: { user: { id: 'owner' } }, error: null });
+    mocks.rpc.mockResolvedValue({data:1,error:null});
     mocks.insert.mockResolvedValue({ error: null });
     mocks.eq.mockReturnValueOnce({ eq: mocks.eq }).mockResolvedValue({ error: null });
     mocks.update.mockReturnValue({ eq: mocks.eq });
-    mocks.createClient.mockResolvedValue({ auth: { getUser: mocks.getUser }, from: () => ({ insert: mocks.insert, update: mocks.update }) });
+    mocks.createClient.mockResolvedValue({ auth: { getUser: mocks.getUser }, rpc:mocks.rpc, from: () => ({ insert: mocks.insert, update: mocks.update }) });
   });
   it('creates the schedule for the authenticated user and selects its date', async () => {
     await expect(addSchedule(form())).rejects.toThrow('Redirect: /calendar?date=2026-10-20');
@@ -23,10 +24,8 @@ describe('schedule actions', () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/calendar');
   });
   it.each([true, false])('sets completed to %s and scopes updates to the owner', async done => {
-    await toggleSchedule(id, done);
-    expect(mocks.update).toHaveBeenCalledWith({ is_done: done, completed_at: done ? expect.any(String) : null });
-    expect(mocks.eq).toHaveBeenNthCalledWith(1, 'id', id);
-    expect(mocks.eq).toHaveBeenNthCalledWith(2, 'user_id', 'owner');
+    await toggleSchedule(id, done,'2026-10-20T12:00:00Z');
+    expect(mocks.rpc).toHaveBeenCalledWith('mutate_schedule',{p_id:id,p_expected:'2026-10-20T12:00:00Z',p_patch:{is_done:done}});
   });
   it('edits a schedule and redirects to its new date', async () => {
     const maybeSingle = vi.fn().mockResolvedValue({ data: { id }, error: null });
@@ -37,11 +36,10 @@ describe('schedule actions', () => {
     const data = form();
     data.set('scheduled_date', '2026-11-01');
     await expect(updateSchedule(id, data)).rejects.toThrow('Redirect: /calendar?date=2026-11-01');
-    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ scheduled_date: '2026-11-01' }));
-    expect(ownerEq).toHaveBeenCalledWith('user_id', 'owner');
-    expect(idEq).toHaveBeenCalledWith('id', id);
+    expect(mocks.rpc).toHaveBeenCalledWith('mutate_schedule',expect.objectContaining({p_id:id,p_expected:'2026-10-20T12:00:00Z',p_patch:expect.objectContaining({scheduled_date:'2026-11-01'})}));
   });
   it('does not claim success when an edit matches no owned row', async () => {
+    mocks.rpc.mockResolvedValue({data:0,error:{code:'40001'}});
     const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
     mocks.update.mockReturnValue({ eq: () => ({ eq: () => ({ select: () => ({ maybeSingle }) }) }) });
     await expect(updateSchedule(id, form())).rejects.toThrow('Redirect: /calendar?error=');

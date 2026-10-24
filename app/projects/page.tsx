@@ -30,7 +30,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
             <progress aria-label={`${project.name} progress`} value={completed} max={Math.max(1,tasks.length)} className="mb-3 w-full accent-slate-900" />
             <form action={toggleProject.bind(null,project.id,!project.is_done)}><SubmitButton label={project.is_done ? 'Reopen project' : 'Mark project complete'} /></form>
             <details className="mt-4"><summary className="cursor-pointer font-medium">Steps and next actions</summary>
-              <ul className="my-4 space-y-3">{tasks.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/projects" actualMinutes={sessions.filter(s => s.schedule_id === plan.id).reduce((sum,s) => sum+(s.duration_sec??0),0)/60} />)}</ul>
+              <ul className="my-4 space-y-3">{tasks.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/projects" actualMinutes={sessions.filter(s => s.schedule_id === plan.id).reduce((sum,s) => sum+(s.duration_sec??0),0)/60} />)}</ul>
               <h3 className="mb-3 font-semibold">Add a step</h3><PlanForm returnTo="/projects" projects={projects} skills={skills} projectId={project.id} />
             </details>
           </article>;

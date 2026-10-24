@@ -28,13 +28,11 @@ export async function addSchedule(form: FormData) {
   redirect('/calendar?date=' + schedule.scheduled_date);
 }
 
-export async function toggleSchedule(id: string, done: boolean) {
+export async function toggleSchedule(id: string, done: boolean, expectedUpdatedAt?: string) {
   try { id = validateId(id); if (typeof done !== 'boolean') throw new Error(); }
   catch { fail('This schedule could not be found. Please refresh and try again.'); }
-  const { supabase, user } = await authenticate();
-  // Keep completed_at in step with is_done, as the planning actions do.
-  const { error } = await supabase.from('schedules').update({ is_done: done, completed_at: done ? new Date().toISOString() : null })
-    .eq('id', id).eq('user_id', user.id);
+  const { supabase } = await authenticate();
+  const { error } = await supabase.rpc('mutate_schedule',{p_id:id,p_expected:expectedUpdatedAt??null,p_patch:{is_done:done}});
   if (error) fail('Could not update your schedule. Please try again.');
   revalidatePath('/calendar');
 }
@@ -43,9 +41,8 @@ export async function updateSchedule(id: string, form: FormData) {
   let schedule;
   try { id = validateId(id); schedule = parseSchedule(form); }
   catch { fail('Enter a valid schedule title, date and optional time and notes.'); }
-  const { supabase, user } = await authenticate();
-  const { data, error } = await supabase.from('schedules').update(schedule)
-    .eq('id', id).eq('user_id', user.id).select('id').maybeSingle();
+  const { supabase } = await authenticate();
+  const { data, error } = await supabase.rpc('mutate_schedule',{p_id:id,p_expected:form.get('expected_updated_at'),p_patch:schedule});
   if (error || !data) fail('Could not update your schedule. It may have been removed. Please refresh and try again.');
   revalidatePath('/calendar');
   redirect('/calendar?date=' + schedule.scheduled_date);

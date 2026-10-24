@@ -37,13 +37,16 @@ export function FocusControls({ session, skills = [], observedAt }: { session: F
   }, [expired, now, pending, session.id, session.focus_revision, session.focus_status]);
   // Refresh idle controls across devices even while a timer is visible; never replace an edited note.
   useEffect(() => {
+    let editing=false;
+    const dirty=(event:Event)=>{if(event.target instanceof Element && event.target.closest("form"))editing=true;};
+    document.addEventListener("input",dirty);document.addEventListener("change",dirty);
     const refresh = () => {
-      if (document.visibilityState === 'visible' && !form.current?.querySelector('textarea')?.value && !form.current?.contains(document.activeElement)) router.refresh();
+      if (!editing && document.visibilityState === 'visible' && !form.current?.querySelector('textarea')?.value && !form.current?.contains(document.activeElement)) router.refresh();
     };
     const timer = setInterval(refresh, 15000);
     window.addEventListener('focus', refresh);
     window.addEventListener('online', refresh);
-    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
+    return () => { clearInterval(timer);document.removeEventListener('input',dirty);document.removeEventListener('change',dirty); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
   }, [router]);
   return <div className="min-w-0">
     <p className="mt-3 font-semibold">{label === "break" ? session.session_kind === "long_break" ? "Long break" : "Short break" : "Focus"} · round {session.cycle_number ?? 1} of {session.cycle_count ?? 1}</p>

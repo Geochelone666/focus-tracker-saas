@@ -1,5 +1,6 @@
 'use server';
 
+import { wallTimeInstants } from '../../lib/time-blocks';
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -23,7 +24,8 @@ export async function createPlan(_state: PlanState, form: FormData): Promise<Pla
     const repeat = textField(form, 'repeat', 10) || 'none';
     dates = recurrenceDates(plan.scheduled_date, repeat, Number(textField(form, 'occurrences', 2) || '12'));
   } catch { return { error: 'Enter a title, valid optional date/time, and an estimate of 1–1440 minutes. Repeats need a date and 2–52 occurrences.' }; }
-  const { supabase, user } = await planningContext();
+  const { supabase, user, zone } = await planningContext();
+  if (plan.scheduled_time && dates.some(date=>date && wallTimeInstants(date,plan.scheduled_time!,zone).length===0)) return { error: "A local time does not exist on one of these dates because clocks change. Choose another time." };
   const series = dates.length > 1 ? randomUUID() : null;
   try {
     const { error } = await supabase.from('schedules').insert(dates.map(date => ({ ...plan, scheduled_date: date, series_id: series, user_id: user.id })));
@@ -40,13 +42,12 @@ export async function editPlan(id: string, _state: PlanState, form: FormData): P
   catch { return { error: 'Check the title, date, optional time, and estimated minutes.' }; }
   const { supabase } = await planningContext();
   try {
-    const { error, data } = await supabase.rpc('edit_schedule', {
-      p_id: id, p_title: plan.title, p_date: plan.scheduled_date, p_time: plan.scheduled_time,
-      p_notes: plan.notes, p_priority: plan.priority, p_estimate: plan.estimated_minutes,
-      p_energy: plan.energy, p_project: plan.project_id, p_skill: plan.skill_id,
-      p_future: form.get('scope') === 'future'
+    const expected = textField(form,'expected_updated_at',64);
+    const revisions = JSON.parse(textField(form,'series_revisions',20000) || '{}');
+    const { error, data } = await supabase.rpc('mutate_schedule', {
+      p_id:id,p_expected:expected,p_patch:plan,p_future:form.get('scope')==='future',p_revisions:revisions
     });
-    if (error || !data) return { error: 'Could not update this plan. Check the date and project/skill selection, then retry.' };
+    if (error || !data) return { error: error?.code==='40001' ? 'This plan or a future occurrence changed on another device. Reload before saving; your draft is kept.' : 'Could not update this plan. Check the date/time and project/skill selection, then retry.' };
   } catch { return { error: 'Could not connect. Your changes have been kept; please try again.' }; }
   refresh(destination(form));
   if (destination(form) === '/calendar' && plan.scheduled_date !== form.get('return_date')) redirect(plan.scheduled_date ? '/calendar?date=' + plan.scheduled_date : '/inbox');
@@ -56,11 +57,11 @@ export async function editPlan(id: string, _state: PlanState, form: FormData): P
 export async function changePlan(id: string, operation: 'complete' | 'reopen' | 'trash' | 'restore' | 'today' | 'tomorrow' | 'inbox', form: FormData) {
   const path = destination(form);
   try { id = validateId(id); } catch { failure(path, 'Invalid plan. Please refresh.'); }
-  const { supabase, user, today } = await planningContext();
+  const { supabase, today } = await planningContext();
   let patch: Record<string, unknown>;
   switch (operation) {
-    case 'complete': patch = { is_done: true, completed_at: new Date().toISOString() }; break;
-    case 'reopen': patch = { is_done: false, completed_at: null }; break;
+    case 'complete': patch = { is_done: true }; break;
+    case 'reopen': patch = { is_done: false }; break;
     case 'trash': patch = { deleted_at: new Date().toISOString() }; break;
     case 'restore': patch = { deleted_at: null }; break;
     case 'inbox': patch = { scheduled_date: null, scheduled_time: null }; break;
@@ -72,8 +73,9 @@ export async function changePlan(id: string, operation: 'complete' | 'reopen' | 
     }
     default: failure(path, 'Unknown operation.');
   }
-  const { data, error } = await supabase.from('schedules').update(patch).eq('id', id).eq('user_id', user.id).select('id').maybeSingle();
-  if (error || !data) failure(path, 'Could not update the plan. Please refresh and try again.');
+  const expected = typeof form.get('expected_updated_at')==='string' ? form.get('expected_updated_at') : null;
+  const { data, error } = await supabase.rpc('mutate_schedule',{p_id:id,p_expected:expected,p_patch:patch});
+  if (error || !data) failure(path, error?.code==='40001' ? 'This plan changed on another device. Refresh before trying again.' : 'Could not update the plan. Please refresh and try again.');
   refresh(path);
 }
 

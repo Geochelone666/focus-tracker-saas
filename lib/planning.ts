@@ -2,8 +2,9 @@ import { validDate } from './calendar';
 import { validateId } from './validation';
 
 export const DEFAULT_TIMEZONE = 'America/Toronto';
-export const SCHEDULE_COLUMNS = 'id,title,scheduled_date,scheduled_time,notes,is_done,priority,estimated_minutes,energy,project_id,skill_id,series_id,deleted_at,deferral_reason';
+export const SCHEDULE_COLUMNS = 'id,title,scheduled_date,scheduled_time,notes,is_done,priority,estimated_minutes,energy,project_id,skill_id,series_id,deleted_at,deferral_reason,updated_at,deadline,completed_at,deferral_count';
 export type Schedule = {
+  updated_at?: string; deadline?: string | null; completed_at?: string | null; deferral_count?: number;
   id: string; title: string; scheduled_date: string | null; scheduled_time: string | null;
   notes: string | null; is_done: boolean; priority: 'low' | 'normal' | 'high';
   estimated_minutes: number | null; energy: string | null; project_id: string | null;
@@ -37,6 +38,8 @@ export function parsePlan(form: FormData) {
   const title = textField(form, 'title', 120);
   const date = textField(form, 'scheduled_date', 10) || null;
   const time = textField(form, 'scheduled_time', 5) || null;
+  const deadline = textField(form, 'deadline', 10) || null;
+  if (deadline && (!validDate(deadline) || deadline<'0002-01-01' || deadline>'9998-12-31')) throw new Error('Invalid deadline');
   const priority = textField(form, 'priority', 10) || 'normal';
   const energy = textField(form, 'energy', 10) || null;
   const estimate = textField(form, 'estimated_minutes', 4);
@@ -45,7 +48,7 @@ export function parsePlan(form: FormData) {
       !['low', 'normal', 'high'].includes(priority) || (energy && !['low', 'medium', 'high'].includes(energy)) ||
       (estimate && (!/^\d+$/.test(estimate) || Number(estimate) < 1 || Number(estimate) > 1440))) throw new Error('Invalid plan');
   const optionalId = (name: string) => { const value = textField(form, name, 36); return value ? validateId(value) : null; };
-  return { title, scheduled_date: date, scheduled_time: time, notes: textField(form, 'notes') || null,
+  return { title, deadline, scheduled_date: date, scheduled_time: time, notes: textField(form, 'notes') || null,
     priority, energy, estimated_minutes: estimate ? Number(estimate) : null,
     project_id: optionalId('project_id'), skill_id: optionalId('skill_id') };
 }
