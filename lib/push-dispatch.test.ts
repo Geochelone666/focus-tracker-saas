@@ -24,4 +24,13 @@ describe('push delivery and receipts',()=>{
  it('disables unregistered tokens',async()=>{const mock=mockClient();await sendReminders(mock.client,vi.fn().mockResolvedValue(Response.json({data:[{status:'error',details:{error:'DeviceNotRegistered'}}]})));expect(mock.changes).toContainEqual({enabled:false});expect(mock.changes[0]).toMatchObject({state:'failed'});});
  it('does not silently lose persistence failures',async()=>{const mock=mockClient();mock.chain.then=vi.fn(resolve=>Promise.resolve({error:{message:'failed'}}).then(resolve));await expect(sendReminders(mock.client,vi.fn().mockResolvedValue(Response.json({data:[{status:'ok',id:'ticket'}]})))).rejects.toThrow('persist');});
  it('checks receipts only for older tickets and separates provider delivery',async()=>{const mock=mockClient();let query=0;mock.chain.then=vi.fn(resolve=>Promise.resolve(++query===1?{error:null}:{data:[{id:'delivery',device_id:'phone',ticket_id:'ticket'}],error:null}).then(resolve));const fetcher=vi.fn().mockResolvedValue(Response.json({data:{ticket:{status:'ok'}}}));expect(await checkReceipts(mock.client,fetcher)).toBe(1);expect(mock.changes[1]).toMatchObject({state:'sent',error_code:null});});
+ it('does not intentionally requeue browser pushes already accepted by the provider when status persistence fails',async()=>{
+  const mock=mockClient(),web={...job,expo_token:null,web_subscription:{endpoint:'https://web.push.apple.com/test'}};
+  mock.rpc.mockImplementation(async(name:string)=>name==='claim_push_reminders'?{data:[web] as unknown as PushJob[],error:null}:{data:true,error:null});
+  mock.chain.then=vi.fn(resolve=>Promise.resolve({error:{message:'database unavailable'}}).then(resolve));
+  await expect(sendReminders(mock.client,vi.fn())).rejects.toThrow('persist accepted web push');
+  expect(sendWebPush).toHaveBeenCalledOnce();
+  expect(mock.changes).toHaveLength(1);
+  expect(mock.changes[0]).toMatchObject({state:'sent'});
+ });
 });
