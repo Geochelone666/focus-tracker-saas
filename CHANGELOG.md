@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Focus V1 batch 1
+
+- Add persistent count-up/countdown timing, pause/resume, revision-checked atomic focus transitions and retained zero-credit abandonment.
+- Share focus controls on Today and Dashboard, with outcome notes, silent countdown completion and refresh recovery.
+- Preserve completed history and owner/AI boundaries in additive migration `20261025000000_focus_state.sql`; deploy it before application changes.
+- Add focus SQL, unit/action and authenticated fixture-backed browser regressions, plus the V1 audit/delivery queue and rollback instructions.
+- Break cycles and the complete capture-to-review flow remain outstanding; no production verification is claimed.
+
 ## Unreleased — phone notifications
 
 - Installable web app with iPhone/Android installation guidance, opt-in web push, per-device advance reminders, tests and remote disconnection. No developer accounts required for this path.

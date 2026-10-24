@@ -1,6 +1,7 @@
 import { changePlan } from '@/app/planning/actions';
 import { startSession } from '@/app/dashboard/actions';
 import type { Choice, Schedule } from '@/lib/planning';
+import { FocusOptions } from './focus-options';
 import { PlanForm } from './plan-form';
 import { SubmitButton } from './submit-button';
 
@@ -23,7 +24,8 @@ export function PlanCard({ plan, projects, skills, returnTo = '/today', actualMi
       {operation(plan.is_done ? 'reopen' : 'complete', plan.is_done ? 'Reopen' : '✓ Complete')}
     </div>
     <div className="mt-3 flex flex-wrap gap-2">
-      {!plan.is_done && <form action={startSession}>
+      {!plan.is_done && <form action={startSession} className="flex min-w-0 flex-wrap items-center gap-2">
+        <FocusOptions />
         <input type="hidden" name="schedule_id" value={plan.id} />
         <input type="hidden" name="skill_id" value={plan.skill_id ?? ''} />
         <SubmitButton label="Start focus" pendingLabel="Starting…" />

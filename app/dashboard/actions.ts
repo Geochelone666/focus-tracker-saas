@@ -1,5 +1,6 @@
 "use server";
 
+import { focusOptions } from "../../lib/focus-state";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
@@ -64,6 +65,9 @@ async function getOwnedSkillId(
 export async function startSession(formData: FormData) {
   const message = "Couldn't start the session. Please try again.";
   const { supabase, user } = await getAuthenticatedUser("startSession", message);
+  let options;
+  try { options = focusOptions(formData); }
+  catch { redirect("/dashboard?error=" + encodeURIComponent("Choose a valid mode and 1–1440 countdown minutes.")); }
   let skillId = await getOwnedSkillId(formData, supabase, user.id);
   let scheduleId: string | null;
   try { scheduleId = validateOptionalSkillId(formData.get('schedule_id')); }
@@ -77,8 +81,8 @@ export async function startSession(formData: FormData) {
 
   try {
     const { error } = await supabase.from("focus_sessions").insert({
+      ...options,
       user_id: user.id,
-      started_at: new Date().toISOString(),
       ended_at: null,
       skill_id: skillId,
       ...(scheduleId ? { schedule_id: scheduleId } : {})
@@ -103,7 +107,7 @@ async function resolveStaleSession(action: "resume" | "discard") {
   try {
     const { data: session, error: readError } = await supabase
       .from("focus_sessions")
-      .select("id, started_at")
+      .select("id, started_at, focus_revision")
       .eq("user_id", user.id)
       .is("ended_at", null)
       .order("started_at", { ascending: false })
@@ -115,14 +119,16 @@ async function resolveStaleSession(action: "resume" | "discard") {
     const now = new Date();
     if (session && classifyActiveSession(session.started_at, now) === "stale") {
       const table = supabase.from("focus_sessions");
-      const mutation = action === "resume"
-        ? table.update({ started_at: now.toISOString() })
-        : table.delete();
-      const { error } = await mutation
+      // Legacy recovery actions never delete history or rewrite the original start.
+      // Resume a stale running session by pausing it first; the current UI can then resume.
+      const mutation = table.update({ focus_status: action === "resume" ? "paused" : "abandoned" });
+      let guarded = mutation
         .eq("id", session.id)
         .eq("user_id", user.id)
         .eq("started_at", session.started_at)
         .is("ended_at", null);
+      if (session.focus_revision !== undefined) guarded = guarded.eq("focus_revision", session.focus_revision);
+      const { error } = await guarded;
       if (error) throw error;
     }
   } catch (error) {
@@ -150,7 +156,7 @@ export async function cleanupDuplicateActiveSessions() {
   try {
     const { data: sessions, error: readError } = await supabase
       .from("focus_sessions")
-      .select("id, started_at")
+      .select("id, started_at, focus_revision")
       .eq("user_id", user.id)
       .is("ended_at", null)
       .order("started_at", { ascending: false })
@@ -162,7 +168,7 @@ export async function cleanupDuplicateActiveSessions() {
       if (session.id === latest?.id) continue;
       const { error } = await supabase
         .from("focus_sessions")
-        .update({ ended_at: session.started_at, duration_sec: 0 })
+        .update({ ended_at: session.started_at, duration_sec: 0, focus_status: "abandoned" })
         .eq("id", session.id)
         .eq("user_id", user.id)
         .eq("started_at", session.started_at)
@@ -199,7 +205,7 @@ export async function stopSession(formData: FormData) {
   try {
     const { data: activeSession, error: readError } = await supabase
       .from("focus_sessions")
-      .select("id, started_at")
+      .select("id, started_at, focus_revision")
       .eq("id", sessionId)
       .eq("user_id", user.id)
       .is("ended_at", null)
@@ -214,7 +220,7 @@ export async function stopSession(formData: FormData) {
       const startedAt = new Date(activeSession.started_at);
       const durationSec = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000));
 
-      const { error } = await supabase
+      let mutation = supabase
         .from("focus_sessions")
         .update({
           ended_at: now.toISOString(),
@@ -226,6 +232,8 @@ export async function stopSession(formData: FormData) {
         .eq("user_id", user.id)
         .eq("started_at", activeSession.started_at)
         .is("ended_at", null);
+      if (activeSession.focus_revision !== undefined) mutation = mutation.eq("focus_revision", activeSession.focus_revision);
+      const { error } = await mutation;
       if (error) throw error;
     }
   } catch (error) {
