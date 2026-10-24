@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dayKey, dueSoon, type Reminder } from '@/lib/planning';
@@ -36,10 +37,11 @@ export function Reminders({ items, zone, userId, date }: { items: Reminder[]; zo
   }
   return <section className="rounded-lg border bg-white p-5">
     <h2 className="font-semibold">Coming up</h2>
-    <p className="mt-1 text-sm text-slate-600">Reminders appear 10 minutes before a timed plan, while Today is open. They do not run after you close this page.</p>
+    <p className="mt-1 text-sm text-slate-600">This list checks plans starting within 10 minutes while Today is open. For reminders when the app is closed, enable Phone reminders in Settings.</p>
     <ul className="my-3 space-y-1" aria-live="polite">{upcoming.map(item => <li key={item.id} className="break-words text-sm">{item.scheduled_time?.slice(0,5)} · {item.title}</li>)}</ul>
     {now && upcoming.length === 0 && <p className="my-3 text-sm text-slate-500">Nothing due in the next 10 minutes.</p>}
-    <button type="button" onClick={enable} disabled={enabled} className="rounded border px-3 py-2 text-sm disabled:opacity-50">{enabled ? 'Notifications enabled' : 'Enable browser notifications'}</button>
+    <button type="button" onClick={enable} disabled={enabled} className="rounded border px-3 py-2 text-sm disabled:opacity-50">{enabled ? 'Notifications enabled' : 'Enable alerts while this page is open'}</button>
+    <p className="mt-3 text-sm"><Link href="/settings/notifications" prefetch={false} className="underline">Set up reminders when the app is closed</Link></p>
     {message && <p role="status" className="mt-2 text-sm text-slate-600">{message}</p>}
   </section>;
 }
