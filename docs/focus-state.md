@@ -1,6 +1,6 @@
 # Focus state V1 — batch 1
 
-Apply `supabase/migrations/20261024000000_focus_state.sql` after **all** earlier migrations, including `20261023000000_ai_integrations.sql`, before deploying the application. Apply migrations in filename order. Do not edit or reapply only the old policy migrations. Use a test project first; review and apply production migrations separately with authorization.
+Apply `supabase/migrations/20261025000000_focus_state.sql` after **all** earlier migrations, including `20261023000000_ai_integrations.sql`, before deploying the application. Apply migrations in filename order. Do not edit or reapply only the old policy migrations. Use a test project first; review and apply production migrations separately with authorization.
 
 The additive, transactional migration preserves legacy ids, timestamps, links, notes and `duration_sec`. Legacy open sessions become running count-up sessions, using their original start; completed sessions keep their durations. The existing unique partial index still covers both running and paused rows because both have `ended_at IS NULL`. Deployment does not auto-close old sessions; review/finish or abandon them explicitly.
 

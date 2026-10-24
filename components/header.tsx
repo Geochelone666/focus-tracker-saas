@@ -1,3 +1,4 @@
+import {WebPushHeartbeat} from './web-notifications';
 import Link from 'next/link';
 import { logout } from '@/app/actions/auth';
 import { createClient } from '@/supabase/server';
@@ -18,7 +19,7 @@ export async function Header() {
             : <Link prefetch={false} href="/login" className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white">Log in</Link>}
         </div>
       </div>
-      {user && <Navigation />}
+      {user && <><Navigation /><WebPushHeartbeat userId={user.id}/></>}
     </div>
   </header>;
 }

@@ -5,7 +5,8 @@ import { Header } from "@/components/header";
 
 export const metadata: Metadata = {
   title: "Focus Tracker",
-  icons: { icon: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: {capable:true,title:"Focus Tracker",statusBarStyle:"default"},
   description: "Plan your day, track focus sessions, and build your skills."
 };
 

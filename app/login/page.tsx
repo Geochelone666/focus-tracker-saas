@@ -4,6 +4,7 @@ import { login, signup } from "./actions";
 type LoginPageProps = {
   searchParams?: Promise<{
     message?: string;
+    next?: string;
   }>;
 };
 
@@ -21,6 +22,7 @@ export default async function LoginPage({ searchParams: searchParamsPromise }: L
       ) : null}
 
       <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <input type="hidden" name="next" value={typeof searchParams?.next==='string'?searchParams.next:''} />
         <div>
           <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
             Email

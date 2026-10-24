@@ -22,6 +22,7 @@ describe('authentication', () => {
     await expect(login(form())).rejects.toThrow('Redirect: /today');
     expect(mocks.signIn).toHaveBeenCalledWith({ email: 'person@example.com', password: ' secret password ' });
   });
+  it('opens a notification target after login and rejects external redirects',async()=>{const data=form();data.set('next','/plans/11111111-1111-4111-8111-111111111111');await expect(login(data)).rejects.toThrow('Redirect: /plans/11111111-1111-4111-8111-111111111111');data.set('next','https://attacker.test');await expect(login(data)).rejects.toThrow('Redirect: /today');});
   it('explains email confirmation when signup has no session', async () => {
     await expect(signup(form())).rejects.toThrow('Redirect: /login?message=' + encodeURIComponent('Check your email to confirm your account, then log in.'));
     expect(mocks.revalidate).not.toHaveBeenCalled();

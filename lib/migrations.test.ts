@@ -28,7 +28,7 @@ async function freshDatabase(includeFocus = true) {
     alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
   `);
   for (const file of await migrationFiles()) {
-    if (!includeFocus && file === "20261024000000_focus_state.sql") continue;
+    if (!includeFocus && file === "20261025000000_focus_state.sql") continue;
     const sql = await readFile(path.join(migrationsDir, file), "utf8");
     // PGlite ships without pgcrypto; gen_random_uuid() is built into PostgreSQL 13+.
     await db.exec(sql.replace(/create extension if not exists pgcrypto;/i, ""));
@@ -59,6 +59,8 @@ describe("supabase migrations", () => {
       await expect(db.exec(await readFile(path.join(sqlTestsDir, file), "utf8")), file).resolves.toBeDefined();
     }
   });
+
+  it("can rerun the mobile notification migration",async()=>{db=await freshDatabase();await expect(db.exec(await readFile(path.join(migrationsDir,"20261023010000_mobile_push.sql"),"utf8"))).resolves.toBeDefined();});
 
   it("keeps schedule ownership on focus sessions after the last migration", async () => {
     db = await freshDatabase();
@@ -121,7 +123,7 @@ describe("focus upgrade and rollback", () => {
     db = await freshDatabase(false);
     const history = (await db.query<{ id: string }>("insert into public.focus_sessions(user_id,started_at,ended_at,duration_sec,note) values($1,'2026-10-01T12:00:00Z','2026-10-01T13:00:00Z',3600,'legacy outcome') returning id",[owner])).rows[0];
     const active = (await db.query<{ id: string }>("insert into public.focus_sessions(user_id,started_at) values($1,'2026-10-23T12:00:00Z') returning id",[owner])).rows[0];
-    const sql = await readFile(path.join(migrationsDir,"20261024000000_focus_state.sql"),"utf8");
+    const sql = await readFile(path.join(migrationsDir,"20261025000000_focus_state.sql"),"utf8");
     await db.exec(sql);
     const saved = (await db.query("select started_at,ended_at,duration_sec,note from public.focus_sessions where id=$1",[history.id])).rows[0];
     expect(saved).toMatchObject({duration_sec:3600,note:'legacy outcome'});
