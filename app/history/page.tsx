@@ -1,3 +1,4 @@
+import { FOCUS_COLUMNS, focusElapsedMs, type FocusSession } from "@/lib/focus-state";
 import Link from "next/link";
 import { timezone as normalizeTimezone } from "@/lib/planning";
 import { redirect } from "next/navigation";
@@ -41,7 +42,7 @@ export default async function HistoryPage({
     ? { data: null, error: countError }
     : await supabase
         .from("focus_sessions")
-        .select("id, started_at, ended_at, note")
+        .select(`${FOCUS_COLUMNS},ended_at,duration_sec,note`)
         .eq("user_id", user.id)
         .order("started_at", { ascending: false })
         .order("id", { ascending: false })
@@ -84,10 +85,8 @@ export default async function HistoryPage({
               </thead>
               <tbody>
                 {sessions.map((session) => {
-                  const seconds = Math.max(0, Math.floor(
-                    ((session.ended_at ? new Date(session.ended_at).getTime() : now) -
-                      new Date(session.started_at).getTime()) / 1000
-                  ));
+                  const row = session as unknown as FocusSession & {ended_at:string|null;duration_sec:number|null;note:string|null};
+                  const seconds = row.ended_at ? row.duration_sec ?? 0 : row.session_kind !== 'focus' ? 0 : Math.floor(focusElapsedMs(row, now)/1000);
 
                   return (
                     <tr key={session.id} className="border-b border-slate-100">
@@ -97,8 +96,8 @@ export default async function HistoryPage({
                       <td className="px-2 py-2 text-slate-800">
                         {session.ended_at ? dateFormatter.format(new Date(session.ended_at)) : "-"}
                       </td>
-                      <td className="px-2 py-2 text-slate-800">{formatDuration(seconds)}</td>
-                      <td className="px-2 py-2 text-slate-800">{session.ended_at === null ? "Active" : "Ended"}</td>
+                      <td className="px-2 py-2 text-slate-800">{formatDuration(seconds)} focus · {formatDuration(row.break_duration_sec ?? 0)} break</td>
+                      <td className="px-2 py-2 text-slate-800">{row.focus_status}</td>
                       <td className="px-2 py-2 text-slate-800">{session.note ?? "-"}</td>
                     </tr>
                   );

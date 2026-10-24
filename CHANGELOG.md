@@ -23,3 +23,9 @@
 - Login and signup: when Supabase can't be reached, the page now says "Couldn't reach the sign-in service…" instead of the raw "fetch failed".
 - Browser end-to-end check of the auth guard (`npm run test:e2e`), run in CI without secrets.
 - Tests: 205 → 266. `npm test` now applies every migration to PGlite and runs `supabase/tests/*.sql`, and there are new tests for skill actions and for time zones.
+
+### Focus V1 batch 2
+
+- Separate short/long breaks and bounded configurable focus cycles, with duplicate-safe next phases.
+- Add optional project/task links, explicit sound/notification opt-in and effective-time history/CSV.
+- Requires additive migration `20261025010000_focus_cycles.sql`; live Supabase remains unverified.

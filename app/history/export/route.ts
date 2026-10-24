@@ -1,3 +1,4 @@
+import { FOCUS_COLUMNS } from "../../../lib/focus-state";
 import { redirect } from "next/navigation";
 import { buildSessionCsv, type CsvSession } from "@/lib/session-csv";
 import { createClient } from "@/supabase/server";
@@ -18,7 +19,7 @@ export async function GET() {
   while (true) {
     const { data, error } = await supabase
       .from("focus_sessions")
-      .select("started_at, ended_at, note")
+      .select(`${FOCUS_COLUMNS},ended_at,duration_sec,note`)
       .eq("user_id", user.id)
       .order("started_at", { ascending: false })
       .order("id", { ascending: false })

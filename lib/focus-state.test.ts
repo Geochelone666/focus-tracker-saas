@@ -22,7 +22,7 @@ describe('recoverable focus clock', () => {
   });
   it.each(['25','45','60','90'])('accepts preset/custom %s minute countdowns', minutes => {
     const form = new FormData();form.set('focus_mode','countdown');form.set('focus_minutes',minutes);
-    expect(focusOptions(form)).toEqual({focus_mode:'countdown',target_seconds:Number(minutes)*60});
+    expect(focusOptions(form)).toMatchObject({focus_mode:'countdown',target_seconds:Number(minutes)*60});
   });
   it.each(['0','-1','1.5','1441','NaN'])('rejects invalid duration %s', minutes => {
     const form = new FormData();form.set('focus_mode','countdown');form.set('focus_minutes',minutes);

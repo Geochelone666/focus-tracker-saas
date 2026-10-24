@@ -28,7 +28,7 @@ async function freshDatabase(includeFocus = true) {
     alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
   `);
   for (const file of await migrationFiles()) {
-    if (!includeFocus && file === "20261025000000_focus_state.sql") continue;
+    if (!includeFocus && file === "20261025000000_focus_state.sql") break;
     const sql = await readFile(path.join(migrationsDir, file), "utf8");
     // PGlite ships without pgcrypto; gen_random_uuid() is built into PostgreSQL 13+.
     await db.exec(sql.replace(/create extension if not exists pgcrypto;/i, ""));
