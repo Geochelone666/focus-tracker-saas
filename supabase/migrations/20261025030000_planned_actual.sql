@@ -37,6 +37,17 @@ insert into public.focus_segments(session_id,user_id,started_at)
  select id,user_id,resumed_at from public.focus_sessions f where focus_status='running' and ended_at is null
  and not exists(select 1 from public.focus_segments s where s.session_id=f.id and s.ended_at is null);
 
+-- Choose the earliest actual midnight, or the first valid time when midnight is skipped.
+create or replace function public.local_day_start(p_day date,p_zone text) returns timestamptz
+language sql stable security invoker set search_path='' as $$
+ with nominal as(select p_day::timestamp at time zone 'UTC' as instant),
+ samples as(select n.instant+h*interval '1 hour' as instant,n.instant as nominal from nominal n cross join (values(-36),(-14),(0),(14),(36)) hours(h)),
+ candidates as(select nominal-((instant at time zone p_zone)-(instant at time zone 'UTC')) as instant from samples)
+ select coalesce(min(instant) filter(where (instant at time zone p_zone)::date=p_day),p_day::timestamp at time zone p_zone) from candidates
+$$;
+revoke all on function public.local_day_start(date,text) from public,anon;
+grant execute on function public.local_day_start(date,text) to authenticated;
+
 -- Every local day is bounded by actual UTC instants, including 23/25-hour DST days.
 create or replace function public.focus_daily(p_from date,p_to date)
 returns table(day date,session_id uuid,kind text,project_id uuid,skill_id uuid,schedule_id uuid,seconds numeric)
@@ -45,10 +56,10 @@ declare zone text; begin
  if auth.uid() is null or p_from is null or p_to is null or p_to<p_from or p_to-p_from>365 then raise exception 'Choose 1–366 days'; end if;
  zone:=coalesce((select timezone from public.profiles where user_id=auth.uid()),'America/Toronto');
  return query
- with dates as(select d::date as local_day,d::date::timestamp at time zone zone as lo,(d::date+1)::timestamp at time zone zone as hi from generate_series(p_from::timestamp,p_to::timestamp,interval '1 day') d),
+ with dates as(select d::date as local_day,public.local_day_start(d::date,zone) as lo,public.local_day_start(d::date+1,zone) as hi from generate_series(p_from::timestamp,p_to::timestamp,interval '1 day') d),
  sessions as(select f.*,case when f.session_kind='focus' then coalesce(f.duration_sec,0) else f.break_duration_sec end::numeric*1000 as target_ms
    from public.focus_sessions f where f.user_id=auth.uid() and f.focus_status='completed'
-   and f.started_at<(p_to+1)::timestamp at time zone zone and f.ended_at>=p_from::timestamp at time zone zone),
+   and f.started_at<public.local_day_start(p_to+1,zone) and f.ended_at>=public.local_day_start(p_from,zone)),
  measured as(select f.id,coalesce(sum(s.duration_ms),0)::numeric as recorded_ms from sessions f left join public.focus_segments s on s.session_id=f.id and s.user_id=auth.uid() and s.ended_at is not null group by f.id),
  pieces as(
   select d.local_day as day,f.id,f.session_kind,f.project_id,f.skill_id,f.schedule_id,
@@ -71,7 +82,7 @@ declare result jsonb; zone text; actual_days jsonb; task_rows jsonb; project_row
  zone:=coalesce((select timezone from public.profiles where user_id=auth.uid()),'America/Toronto');
  with actual as materialized(select f.day,sum(f.seconds) filter(where f.kind='focus') as focus_seconds,sum(f.seconds) filter(where f.kind<>'focus') as break_seconds from public.focus_daily(p_from,p_to) f group by f.day),
  planned as(select scheduled_date as day,sum(estimated_minutes) as minutes from public.schedules where user_id=auth.uid() and deleted_at is null and scheduled_date between p_from and p_to group by scheduled_date),
- completed as(select (completed_at at time zone zone)::date as day,count(*) as total from public.schedules where user_id=auth.uid() and deleted_at is null and completed_at>=p_from::timestamp at time zone zone and completed_at<(p_to+1)::timestamp at time zone zone group by (completed_at at time zone zone)::date)
+ completed as(select (completed_at at time zone zone)::date as day,count(*) as total from public.schedules where user_id=auth.uid() and deleted_at is null and completed_at>=public.local_day_start(p_from,zone) and completed_at<public.local_day_start(p_to+1,zone) group by (completed_at at time zone zone)::date)
  select coalesce(jsonb_agg(to_jsonb(q) order by q.day),'[]') into actual_days from (
   select d::date as day,coalesce(a.focus_seconds,0) as focus_seconds,coalesce(a.break_seconds,0) as break_seconds,p.minutes as planned_minutes,coalesce(c.total,0) as completed_tasks
   from generate_series(p_from::timestamp,p_to::timestamp,interval '1 day') d left join actual a on a.day=d::date left join planned p on p.day=d::date left join completed c on c.day=d::date

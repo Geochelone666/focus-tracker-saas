@@ -14,6 +14,9 @@ insert into public.focus_segments(session_id,user_id,started_at,ended_at,duratio
 set local role authenticated;
 select set_config('request.jwt.claim.sub',current_setting('test.owner'),true);
 do $$ declare report jsonb; t jsonb; total numeric; f public.focus_sessions; begin
+ if public.local_day_start('2026-11-01','America/Havana')<>'2026-11-01T04:00:00Z'::timestamptz then raise exception 'Repeated midnight lost first hour'; end if;
+ if public.local_day_start('2026-03-08','America/Havana')<>'2026-03-08T05:00:00Z'::timestamptz then raise exception 'Skipped midnight incorrect'; end if;
+ if public.local_day_start('2026-03-29','Asia/Beirut')<>'2026-03-28T22:00:00Z'::timestamptz then raise exception 'Beirut midnight gap incorrect'; end if;
  report:=public.analytics_report('2026-10-31','2026-11-01');
  if (select sum(seconds) from public.focus_daily('2026-10-31','2026-11-01'))<>5460 then raise exception 'Intervals lost or double counted: %',report; end if;
  if (select sum(seconds) from public.focus_daily('2026-10-31','2026-10-31'))<>1800 then raise exception 'Cross-day/month attribution broken'; end if;

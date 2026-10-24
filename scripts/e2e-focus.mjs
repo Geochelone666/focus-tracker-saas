@@ -31,7 +31,10 @@ function serial(fn) { const result=queue.then(fn);queue=result.catch(()=>{});ret
 const user={id:owner,email:'focus@example.invalid',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:new Date().toISOString()};
 const jwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+86400},'fixture-signature'].map((v,i)=>i===2?v:Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
 const safe = value => { if(!/^[a-z_][a-z_0-9]*$/.test(value)) throw new Error('Unsupported fixture identifier');return `"${value}"`; };
+const operations=[];
 const server=createServer(async(req,res)=>{
+  const began=Date.now(),path=new URL(req.url,"http://fixture").pathname;operations.push(`start ${req.method} ${path}`);
+  res.on("finish",()=>operations.push(`done ${req.method} ${path}: ${res.statusCode} (${Date.now()-began}ms)`));
   try {
     const url=new URL(req.url,`http://127.0.0.1:${fixturePort}`);
     let text='';for await(const part of req) text+=part;
@@ -106,7 +109,7 @@ try {
   const cookie={name:'sb-127-auth-token',value:'base64-'+Buffer.from(JSON.stringify({access_token:jwt,refresh_token:'fixture-refresh',expires_at:Math.floor(Date.now()/1000)+86400,expires_in:86400,token_type:'bearer',user})).toString('base64url'),domain:'localhost',path:'/'};
   const first=await browser.newContext(),second=await browser.newContext();
   await first.addCookies([cookie]);await second.addCookies([cookie]);
-  const a=await first.newPage(),b=await second.newPage();
+  let a=await first.newPage();const b=await second.newPage();
   const errors=[];for(const page of [a,b])page.on('pageerror',error=>errors.push(error.message));
   await Promise.all([a.goto(base+'/dashboard'),b.goto(base+'/dashboard')]);
   await Promise.all([a.getByRole('button',{name:'Start Session',exact:true}).click(),b.getByRole('button',{name:'Start Session',exact:true}).click()]);
@@ -119,6 +122,8 @@ try {
   await a.clock.install();await a.clock.setFixedTime(new Date(Date.now()+600000));
   await a.waitForTimeout(1100);assert.equal(await a.getByRole('timer').innerText(),frozen,'Ten browser-clock minutes while paused do not accrue');
   assert.equal(Number((await rows())[0].accumulated_ms),Number(paused.accumulated_ms));
+  // Keep the clock simulation isolated from subsequent framework scheduling.
+  await a.close();a=await first.newPage();a.on('pageerror',error=>errors.push(error.message));await a.goto(base+'/dashboard');
   await a.getByRole('button',{name:'Resume focus',exact:true}).click();await a.getByRole('button',{name:'Pause focus',exact:true}).waitFor();
   await b.reload(); // Both devices now hold the same running revision.
   await a.getByRole('button',{name:'Pause focus',exact:true}).click();await a.getByRole('button',{name:'Resume focus',exact:true}).waitFor();
@@ -175,6 +180,7 @@ try {
   await a.setViewportSize({width:1200,height:900});
   const timeline=a.getByLabel(`Timeline ${today}`,{exact:true});
   async function dropBlock(kind,minute){
+    await a.locator('[data-time-block-ready="true"]').waitFor();
     const task=await calendarTask();
     await timeline.evaluate((element,payload)=>{
       const transfer=new DataTransfer();transfer.setData('application/x-focus-task',JSON.stringify({id:payload.id,kind:payload.kind}));
@@ -238,5 +244,5 @@ try {
   await waitFor(async()=>serial(async()=>(await db.query("select count(*)::int as n from public.schedules where title='Next week adjustment'")).rows[0].n===1),'Future adjustment missing');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
-} catch(error) {console.error(logs.slice(-10000));const page=browser?.contexts()[0]?.pages()[0];if(page)console.error((await page.locator('body').innerText()).slice(-6000));throw error;}
+} catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}
 finally {await browser?.close();app.kill('SIGTERM');await new Promise(resolve=>server.close(resolve));await queue;await db.close();}

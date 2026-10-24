@@ -26,6 +26,8 @@ function BlockEditor({task,tasks,date}:{task:Schedule;tasks:Schedule[];date:stri
  </form>;
 }
 export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:string;view:'day'|'week';zone:string}){
+ const [ready,setReady]=useState(false);
+ useEffect(()=>setReady(true),[]);
  const router=useRouter(),[selected,setSelected]=useState(''),[result,setResult]=useState<BlockResult>({}),[pending,startTransition]=useTransition();
  const offset=(new Date(`${date}T12:00:00Z`).getUTCDay()+6)%7;
  const dates=Array.from({length:view==='week'?7:1},(_,i)=>addDays(date,view==='week'?i-offset:0));
@@ -48,10 +50,10 @@ export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:
   }catch{setResult({error:'Could not move this task. Use the editor below.'});}
  }
  function drag(event:React.DragEvent,id:string,kind='move'){event.dataTransfer.setData('application/x-focus-task',JSON.stringify({id,kind}));event.dataTransfer.effectAllowed='move';}
- return <section className="my-6 min-w-0" aria-label={`${view} time blocking`}>
+ return <section data-time-block-ready={ready?"true":"false"} aria-busy={!ready||pending} className="my-6 min-w-0" aria-label={`${view} time blocking`}>
   <p className="mb-3 text-sm">Times follow {zone}. Drag an Inbox task onto the timeline, move a block, or drag its Resize handle. The editor provides the same operations with keyboard or touch. Overlaps are allowed. DST dates show elapsed durations; repeated start times use the later occurrence, matching server reminders.</p>
   <div className="mb-3 flex flex-wrap gap-2"><label className="text-sm">Arrange task<select aria-label="Arrange task" value={selected} onChange={e=>setSelected(e.target.value)} className="ml-2 max-w-full rounded border p-2"><option value="">Choose a task</option>{live.filter(task=>!task.is_done).map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
-   {inbox.map(task=><button key={task.id} draggable onDragStart={event=>drag(event,task.id)} onClick={()=>setSelected(task.id)} className="max-w-full break-words rounded border px-3 py-2 text-sm">Inbox: {task.title}</button>)}
+   {inbox.map(task=><button key={task.id} draggable={ready} onDragStart={event=>drag(event,task.id)} onClick={()=>setSelected(task.id)} className="max-w-full break-words rounded border px-3 py-2 text-sm">Inbox: {task.title}</button>)}
   </div>
   {result.error&&<p role="alert" className="my-2 text-red-800">{result.error}</p>}{result.success&&<p role="status" className="my-2">{result.success}</p>}{pending&&<p role="status">Saving block…</p>}
   {chosen&&<BlockEditor key={chosen.id} task={chosen} tasks={tasks} date={date}/>}
@@ -64,14 +66,14 @@ export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:
       {Array.from({length:24},(_,h)=><div key={h} className="pointer-events-none absolute w-full border-t border-slate-100" style={{top:h*48}}/>)}
       {layout.segments.map(({task,interval,top,height,lane,continued,carries})=>{
        const conflicts=conflictingTasks(task,live,zone),lanes=layout.lanes;
-       return <article key={task.id} draggable={!task.is_done} onDragStart={event=>drag(event,task.id)} className={`absolute overflow-hidden rounded border p-1 text-xs ${task.is_done?'border-slate-300 bg-slate-100':'border-blue-400 bg-blue-50'}`}
+       return <article key={task.id} draggable={ready&&!task.is_done} onDragStart={event=>drag(event,task.id)} className={`absolute overflow-hidden rounded border p-1 text-xs ${task.is_done?'border-slate-300 bg-slate-100':'border-blue-400 bg-blue-50'}`}
         style={{top:top*.8,height:Math.max(32,height*.8),left:`${lane*100/lanes}%`,width:`${100/lanes}%`}}>
         <button onClick={()=>setSelected(task.id)} className="w-full break-words text-left font-semibold underline">{task.title}</button>
         <p>{continued ? "Continued · " : ""}{task.scheduled_time?.slice(0,5)}–{interval?timestampLabel(interval.end,zone):'?'} · {task.estimated_minutes??'?'}m{carries ? " · continues tomorrow" : ""}</p>
         {conflicts.length>0&&<p role="status" className="text-amber-900">Overlaps {conflicts.length} task(s)</p>}
         {interval?.ambiguous&&<p>Repeated time: standard occurrence</p>}
         {!interval&&<p className="text-amber-900">Check time / duration</p>}
-        {!task.is_done&&<button draggable onDragStart={event=>{event.stopPropagation();drag(event,task.id,'resize');}} onClick={()=>setSelected(task.id)} aria-label={`Resize ${task.title}`} className="absolute bottom-0 left-0 w-full cursor-ns-resize border-t bg-blue-50 text-left">Resize / edit</button>}
+        {!task.is_done&&<button draggable={ready} onDragStart={event=>{event.stopPropagation();drag(event,task.id,'resize');}} onClick={()=>setSelected(task.id)} aria-label={`Resize ${task.title}`} className="absolute bottom-0 left-0 w-full cursor-ns-resize border-t bg-blue-50 text-left">Resize / edit</button>}
        </article>;
       })}
      </div>

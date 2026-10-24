@@ -21,6 +21,7 @@ try {
 
   for (const path of protectedPaths) {
     const res = await page.goto(base + path);
+    await page.waitForURL(url=>url.pathname==='/login',{timeout:20000});
     assert.equal(new URL(page.url()).pathname, '/login', `${path} redirects to /login (got ${page.url()})`);
     assert.equal(res.status(), 200, `${path} ends on a working login page`);
     await page.getByRole('heading', { name: 'Welcome back' }).waitFor();
@@ -33,6 +34,7 @@ try {
     { name: 'sb-127-auth-token', value: 'garbage', domain: host, path: '/x' }
   ]);
   await page.goto(base + '/dashboard');
+  await page.waitForURL(url=>url.pathname==='/login',{timeout:20000});
   assert.equal(new URL(page.url()).pathname, '/login', 'forged cookie still redirected');
   await context.clearCookies();
 
