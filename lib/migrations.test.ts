@@ -66,6 +66,15 @@ describe("supabase migrations", () => {
 
   it("can rerun the mobile notification migration",async()=>{db=await freshDatabase();await expect(db.exec(await readFile(path.join(migrationsDir,"20261023010000_mobile_push.sql"),"utf8"))).resolves.toBeDefined();});
 
+  it("keeps one covering schedule owner/date index after Focus V1",async()=>{
+    db=await freshDatabase();
+    const result=await db.query<{indexname:string}>(
+      "select indexname from pg_indexes where schemaname='public' and tablename='schedules' and indexname in ('schedules_owner_date','schedules_user_date_idx') order by indexname"
+    );
+    expect(result.rows.map(row=>row.indexname)).toEqual(['schedules_user_date_idx']);
+  });
+
+
   it("keeps schedule ownership on focus sessions after the last migration", async () => {
     db = await freshDatabase();
     const foreign = (
