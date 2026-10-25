@@ -1,4 +1,6 @@
-export type CsvSession = {
+import { focusElapsedMs, type FocusSession } from './focus-state';
+export type CsvSession = Partial<FocusSession> & {
+  duration_sec?: number | null;
   started_at: string;
   ended_at: string | null;
   note: string | null;
@@ -27,8 +29,10 @@ export function buildSessionCsv(sessions: CsvSession[], now = Date.now()): strin
     rows.push([
       start.toISOString(),
       end?.toISOString() ?? "",
-      Math.max(0, Math.floor(((end?.getTime() ?? now) - start.getTime()) / 1000)),
-      end === null ? "active" : "ended",
+      session.duration_sec !== undefined
+        ? end ? session.duration_sec ?? 0 : session.session_kind && session.session_kind !== 'focus' ? 0 : Math.floor(focusElapsedMs(session as FocusSession, now)/1000)
+        : Math.max(0, Math.floor(((end?.getTime() ?? now) - start.getTime()) / 1000)),
+      session.focus_status ?? (end === null ? "active" : "ended"),
       textCell(session.note ?? "")
     ]);
   }
