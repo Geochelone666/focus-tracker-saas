@@ -1,5 +1,6 @@
 import { validDate } from './calendar';
 import { validateId } from './validation';
+import { wallTimeInstants } from './wall-time';
 
 export const DEFAULT_TIMEZONE = 'America/Toronto';
 export const SCHEDULE_COLUMNS = 'id,title,scheduled_date,scheduled_time,notes,is_done,priority,estimated_minutes,energy,project_id,skill_id,series_id,deleted_at,deferral_reason,updated_at,deadline,completed_at,deferral_count';
@@ -68,17 +69,27 @@ export function plannedMinutes(items: Schedule[], buffer = 0) {
 
 export type Reminder = { id: string; title: string; scheduled_date: string | null; scheduled_time: string | null };
 export function dueSoon(items: Reminder[], now: Date, zone: string) {
+  const resolvedZone = timezone(zone);
   const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone(zone), year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: resolvedZone, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   });
-  // Plans have minute precision. Advance actual instants so a DST jump cannot
-  // invent a nonexistent minute or hide an upcoming repeated wall-clock time.
+  // The display window is minute-granular, including the current minute.
+  const startMinute = Math.floor(now.getTime() / 60_000) * 60_000;
   const upcoming = new Set(Array.from({ length: 11 }, (_, minute) => {
-    const parts = formatter.formatToParts(new Date(now.getTime() + minute * 60_000));
+    const parts = formatter.formatToParts(new Date(startMinute + minute * 60_000));
     const part = (type: string) => parts.find(value => value.type === type)!.value;
     return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
   }));
-  return items.filter(item => item.scheduled_date && item.scheduled_time &&
-    upcoming.has(`${item.scheduled_date}T${item.scheduled_time.slice(0, 5)}`));
+  return items.filter(item => {
+    if (!item.scheduled_date || !item.scheduled_time) return false;
+    const localTime = item.scheduled_time.slice(0, 5);
+    if (!upcoming.has(`${item.scheduled_date}T${localTime}`)) return false;
+    // A fall-back wall time occurs twice: both calendar blocks and the server
+    // deliver at the later (standard-time) occurrence, never one hour early.
+    const instants = wallTimeInstants(item.scheduled_date,localTime,resolvedZone);
+    const scheduledAt = instants.at(-1);
+    return scheduledAt !== undefined && scheduledAt >= startMinute &&
+      scheduledAt <= startMinute + 10 * 60_000;
+  });
 }
