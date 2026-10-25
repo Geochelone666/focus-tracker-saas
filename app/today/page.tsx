@@ -6,6 +6,7 @@ import { PlanForm } from '@/components/plan-form';
 import { PlanCard } from '@/components/plan-card';
 import { ReflectionForm } from '@/components/planning-forms';
 import { Reminders } from '@/components/reminders';
+import { FocusNext } from '@/components/focus-next';
 import { FocusControls } from '@/components/focus-controls';
 import { FOCUS_COLUMNS, type FocusSession } from '@/lib/focus-state';
 
@@ -22,6 +23,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const { data: running, error: runningError } = await supabase.from('focus_sessions').select(FOCUS_COLUMNS).eq('user_id',user.id).is('ended_at',null).maybeSingle();
   if (runningError) throw runningError;
   const active = running as FocusSession | null;
+  const { data: lastPhase } = await supabase.from('focus_sessions').select(FOCUS_COLUMNS).eq('user_id',user.id).order('started_at',{ascending:false}).limit(1).maybeSingle();
   const activePlan = active ? live.find(plan => plan.id === active.schedule_id) : null;
   const focused = sessions.filter(item => dayKey(new Date(item.started_at), zone) === today).reduce((sum,item) => sum + (item.duration_sec ?? 0),0) / 60;
   const estimated = plannedMinutes(plans);
@@ -39,6 +41,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       <div className="rounded-lg border bg-white p-4"><p className="text-sm text-slate-500">Remaining planned work</p><p className="text-2xl font-semibold">{estimated}m</p><p className="text-xs text-slate-500">{withBreaks}m with 5-minute buffers</p></div>
     </div>
     {estimated > 480 && <p role="status" className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900">More than 8 hours are planned. Consider moving a few items or leaving room for breaks.</p>}
+    {!active && lastPhase && <FocusNext key={lastPhase.id} session={lastPhase as FocusSession} />}
     {active && <section className="mb-6 rounded-lg border bg-white p-5">
       <h2 className="font-semibold">Focusing{activePlan ? `: ${activePlan.title}` : ''}</h2>
       <FocusControls key={active.id} session={active} skills={skills} observedAt={Date.now()} />
@@ -48,10 +51,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       <div>
         <section><h2 className="mb-3 text-xl font-semibold">Your day</h2>
           {plans.length === 0 && <p className="mb-4 text-slate-500">A fresh start. Add a plan or pick something from your Inbox.</p>}
-          <ul className="space-y-3">{plans.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
+          <ul className="space-y-3">{plans.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
         </section>
         {overdue.length > 0 && <section className="mt-6"><h2 className="mb-3 text-xl font-semibold">Carry-over · {overdue.length}</h2><p className="mb-3 text-sm text-slate-600">Plans change. Choose what still matters and reschedule the rest.</p>
-          <ul className="space-y-3">{overdue.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
+          <ul className="space-y-3">{overdue.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} actualMinutes={actual(plan.id)} />)}</ul>
         </section>}
       </div>
       <aside className="space-y-6">

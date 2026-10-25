@@ -1,3 +1,4 @@
+import { TimeBlockCalendar } from '@/components/time-block-calendar';
 import Link from 'next/link';
 import { planningContext, planningData } from '@/lib/planning-data';
 import { calendarMonth, validDate } from '@/lib/calendar';
@@ -5,7 +6,7 @@ import { PlanForm } from '@/components/plan-form';
 import { sortPlans } from '@/lib/planning';
 import { PlanCard } from '@/components/plan-card';
 
-export default async function CalendarPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ date?: string; month?: string; error?: string; status?: string }> }) {
+export default async function CalendarPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ date?: string; month?: string; view?: string; error?: string; status?: string }> }) {
   const searchParams = await searchParamsPromise;
   const context = await planningContext();
   const { today, zone } = context;
@@ -16,16 +17,19 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
   try { calendar = calendarMonth(month); }
   catch { month = today.slice(0, 7); calendar = calendarMonth(month); }
   if (!calendar.days.includes(selected)) selected = `${month}-01`;
+  const view=searchParams.view==='day'||searchParams.view==='week'?searchParams.view:'month';
   const status = searchParams.status === 'open' || searchParams.status === 'completed' ? searchParams.status : 'all';
   const schedules = allSchedules.filter(item => !item.deleted_at && item.scheduled_date && calendar.days.includes(item.scheduled_date));
   const daySchedules = sortPlans(schedules.filter(item => item.scheduled_date === selected));
   const selectedSchedules = daySchedules.filter(item => status === 'all' || item.is_done === (status === 'completed'));
-  const dateHref = (date: string) => `?date=${date}&status=${status}`;
+  const dateHref = (date: string) => `?date=${date}&status=${status}&view=${view}`;
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 text-slate-900">
       <h1 className="text-3xl font-bold">Schedules & Calendar</h1>
       <p className="mt-2 mb-6 text-slate-600">Plan your day and check off your progress. Time and notes are optional.</p>
       {typeof searchParams.error === 'string' && <p role="alert" className="mb-4 rounded bg-red-50 p-4 text-red-800">{searchParams.error}</p>}
+      <nav aria-label="Calendar view" className="mb-4 flex gap-4">{(['day','week','month'] as const).map(item=><Link key={item} href={`?date=${selected}&view=${item}`} aria-current={view===item?'page':undefined} className="capitalize underline">{item}</Link>)}</nav>
+      {view!=='month'&&<TimeBlockCalendar tasks={allSchedules} date={selected} view={view} zone={zone}/>}
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <section className="min-w-0 rounded-lg border bg-white p-3 sm:p-5" aria-label="Monthly calendar">
           <nav className="mb-5 flex items-center justify-between gap-2" aria-label="Change month">
@@ -61,7 +65,7 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
         </nav>
         {selectedSchedules.length === 0 && <p className="text-slate-500">{daySchedules.length ? 'No schedules match this filter.' : 'No schedules for this day. Add your first plan above.'}</p>}
         <ul className="space-y-3">
-          {selectedSchedules.map(plan => <PlanCard key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/calendar" />)}
+          {selectedSchedules.map(plan => <PlanCard series={allSchedules} key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/calendar" />)}
         </ul>
       </section>
     </main>

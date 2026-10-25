@@ -8,7 +8,7 @@ vi.mock('next/cache',()=>({revalidatePath:mocks.revalidate}));
 vi.mock('next/navigation',()=>({redirect:(url:string)=>{throw new Error('Redirect: '+url);}}));
 import { changePlan, createPlan, editPlan, saveReflection, saveTimezone } from './actions';
 const id='11111111-1111-4111-8111-111111111111';
-function form(fields: Record<string,string>={}) {const data=new FormData();data.set('title','Read');for(const[k,v]of Object.entries(fields))data.set(k,v);return data;}
+function form(fields: Record<string,string>={}) {const data=new FormData();data.set('title','Read');data.set('expected_updated_at','2026-10-20T12:00:00.123456Z');for(const[k,v]of Object.entries(fields))data.set(k,v);return data;}
 describe('planning actions',()=>{
   beforeEach(()=>{
     vi.clearAllMocks();
@@ -33,20 +33,19 @@ describe('planning actions',()=>{
   });
   it('uses the RLS-protected atomic editor for future occurrences',async()=>{
     expect(await editPlan(id,{},form({scheduled_date:'2026-10-21',scope:'future'}))).toHaveProperty('success');
-    expect(mocks.rpc).toHaveBeenCalledWith('edit_schedule',expect.objectContaining({p_id:id,p_date:'2026-10-21',p_future:true}));
+    expect(mocks.rpc).toHaveBeenCalledWith('mutate_schedule',expect.objectContaining({p_id:id,p_expected:'2026-10-20T12:00:00.123456Z',p_patch:expect.objectContaining({scheduled_date:'2026-10-21'}),p_future:true}));
   });
   it('scopes moving to tomorrow to the signed-in owner and retains the reason',async()=>{
     await changePlan(id,'tomorrow',form({reason:'New priority'}));
-    expect(mocks.update).toHaveBeenCalledWith({scheduled_date:'2026-10-21',deferral_reason:'New priority'});
-    expect(mocks.eq).toHaveBeenCalledWith('id',id);expect(mocks.eq).toHaveBeenCalledWith('user_id','owner');
+    expect(mocks.rpc).toHaveBeenCalledWith('mutate_schedule',expect.objectContaining({p_id:id,p_expected:'2026-10-20T12:00:00.123456Z',p_patch:{scheduled_date:'2026-10-21',deferral_reason:'New priority'}}));
   });
   it('soft deletes and restores without destroying history',async()=>{
-    await changePlan(id,'trash',form());expect(mocks.update).toHaveBeenCalledWith({deleted_at:expect.any(String)});
-    await changePlan(id,'restore',form());expect(mocks.update).toHaveBeenCalledWith({deleted_at:null});
+    await changePlan(id,'trash',form());expect(mocks.rpc).toHaveBeenCalledWith("mutate_schedule",expect.objectContaining({p_patch:{deleted_at:expect.any(String)}}));
+    await changePlan(id,'restore',form());expect(mocks.rpc).toHaveBeenCalledWith("mutate_schedule",expect.objectContaining({p_patch:{deleted_at:null}}));
   });
-  it('clears time when returning to the inbox',async()=>{await changePlan(id,'inbox',form());expect(mocks.update).toHaveBeenCalledWith({scheduled_date:null,scheduled_time:null});});
+  it('clears time when returning to the inbox',async()=>{await changePlan(id,'inbox',form());expect(mocks.rpc).toHaveBeenCalledWith("mutate_schedule",expect.objectContaining({p_patch:{scheduled_date:null,scheduled_time:null}}));});
   it('reports missing rows and rejects unsafe redirect destinations',async()=>{
-    mocks.maybeSingle.mockResolvedValue({data:null,error:null});
+    mocks.rpc.mockResolvedValue({data:null,error:{code:"40001"}});
     await expect(changePlan(id,'complete',form({return_to:'https://evil.example'}))).rejects.toThrow('Redirect: /today?error=');
   });
   it('stores only the current user/day reflection',async()=>{
