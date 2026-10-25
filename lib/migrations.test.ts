@@ -53,6 +53,10 @@ async function asUser<T>(user: string, fn: () => Promise<T>) {
 }
 
 describe("supabase migrations", () => {
+  it("has unique migration versions for Supabase CLI restoration",async()=>{
+    const files=await migrationFiles(),versions=files.map(file=>file.split('_')[0]);
+    expect(new Set(versions).size).toBe(versions.length);
+  });
   it("apply cleanly in CLI order and pass every supabase/tests SQL check", async () => {
     db = await freshDatabase();
     for (const file of (await readdir(sqlTestsDir)).filter((f) => f.endsWith(".sql")).sort()) {

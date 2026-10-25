@@ -53,3 +53,14 @@ Apply `20261025000000_focus_state.sql` last, before deploying Focus V1 batch 1. 
 ## Phone reminders (20261023010000)
 
 Apply `20261023010000_mobile_push.sql` after the AI integration migration. It is transactional/rerunnable and adds owner-isolated web/native device registrations, a server-only delivery queue, bounded per-account device count, and service-role-only lease/check/cleanup functions. It does not change existing schedule RLS or expose device management to AI keys. Configure VAPID server keys and the optional hosted `../mobile-push-cron.sql` scheduler separately; see [phone notification deployment](../../docs/phone-notifications.md). The committed `../tests/mobile_push.sql` regression script runs against a disposable database through `npm test`.
+
+## Complete daily workflow (unreleased V1)
+
+Apply the Focus migrations **after** main's phone/security migrations, in filename order:
+
+1. `20261025000000_focus_state.sql`
+2. `20261025010000_focus_cycles.sql`
+3. `20261025020000_time_blocks.sql`
+4. `20261025030000_planned_actual.sql`
+
+These versions were reassigned before release to avoid collisions with main's `20261024...` push/security versions. None were applied to a hosted production database during this work. Keep old deployed migrations unchanged. The final migration adds owner-readable, trigger-written effective intervals and bounded aggregate reports; see [allocation, validation and non-destructive rollback](../../docs/planned-actual.md). All migration versions are checked for uniqueness in the regression suite.

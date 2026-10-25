@@ -1,15 +1,7 @@
+import { readAnalytics } from '@/lib/analytics-report';
+import { addDays,dayKey } from '@/lib/planning';
 import { timezone as normalizeTimezone } from "@/lib/planning";
-import { readAllRows } from "@/lib/paginated-query";
-import {
-  buildAnalyticsDays,
-  formatDuration,
-  getMidnightInTimeZone,
-  getTodayRangeUtc,
-  getDailyProgressPercent,
-  groupSecondsByDay,
-  sumDurations,
-  type SessionDurationRow
-} from "@/lib/analytics";
+import { formatDuration, getDailyProgressPercent } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { createClient } from "@/supabase/server";
 import { cleanupDuplicateActiveSessions, startSession, updateDailyTarget } from "@/app/dashboard/actions";
@@ -74,16 +66,9 @@ export default async function DashboardPage({
   const target = profile?.daily_focus_target_minutes ?? null;
   const timezone = normalizeTimezone(profile?.timezone);
   const dateFormatter = new Intl.DateTimeFormat('en-CA', {timeZone: timezone, dateStyle:'medium',timeStyle:'short'});
-  const { startUtc, endUtc } = getTodayRangeUtc(new Date(), timezone);
-  const todaySessions = await readAllRows((from, to) => supabase
-    .from("focus_sessions")
-    .select("duration_sec")
-    .eq("user_id", user.id)
-    .gte("started_at", startUtc.toISOString())
-    .lt("started_at", endUtc.toISOString())
-    .order("id")
-    .range(from, to));
-  const todayMinutes = sumDurations(todaySessions ?? []) / 60;
+  const todayKey=dayKey(new Date(),timezone);
+  const weeklyReport=await readAnalytics(supabase,addDays(todayKey,-6),todayKey);
+  const todayMinutes=Number(weeklyReport.days.find(day=>day.day===todayKey)?.focus_seconds??0)/60;
   const progressPercent = getDailyProgressPercent(todayMinutes, target);
 
   const { data: sessions } = await supabase
@@ -103,30 +88,8 @@ export default async function DashboardPage({
 
   const { data: projects } = await supabase.from('projects').select('id,name').eq('user_id',user.id).order('name');
   const { data: taskChoices } = await supabase.from('schedules').select('id,title').eq('user_id',user.id).eq('is_done',false).is('deleted_at',null).order('id').limit(100);
-  const analyticsDays = buildAnalyticsDays(new Date(), timezone);
-  const today = analyticsDays[analyticsDays.length - 1].date;
-  const tomorrow = new Date(today);
-  tomorrow.setUTCDate(today.getUTCDate() + 1);
-  const analyticsStart = getMidnightInTimeZone(analyticsDays[0].date, timezone).toISOString();
-  const analyticsEnd = getMidnightInTimeZone(tomorrow, timezone).toISOString();
-
-  const weeklySessions = await readAllRows((from, to) => supabase
-    .from("focus_sessions")
-    .select("started_at, duration_sec")
-    .eq("user_id", user.id)
-    .gte("started_at", analyticsStart)
-    .lt("started_at", analyticsEnd)
-    .order("id")
-    .range(from, to));
-
-  const typedWeeklySessions: SessionDurationRow[] = (weeklySessions ?? []) as SessionDurationRow[];
-
-  const weeklyTotalSeconds = sumDurations(typedWeeklySessions);
-  const secondsByDay = groupSecondsByDay(typedWeeklySessions, analyticsDays.map((day) => day.key), timezone);
-  const dailyFocus = analyticsDays.map((day) => ({
-    ...day,
-    minutes: Math.floor((secondsByDay.get(day.key) ?? 0) / 60)
-  }));
+  const weeklyTotalSeconds=weeklyReport.days.reduce((sum,day)=>sum+Number(day.focus_seconds),0);
+  const dailyFocus=weeklyReport.days.map(day=>({key:day.day,label:day.day,minutes:Math.floor(Number(day.focus_seconds)/60)}));
   const maximumDailyMinutes = Math.max(...dailyFocus.map((day) => day.minutes));
 
   return (

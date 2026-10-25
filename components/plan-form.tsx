@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useActionState } from 'react';
 import { createPlan, editPlan } from '@/app/planning/actions';
 import type { Choice, Schedule } from '@/lib/planning';
@@ -17,16 +17,20 @@ export function PlanForm({ plan, date = '', projects = [], skills = [], projectI
     deadline:plan?.deadline ?? '', repeat: 'none', occurrences: '12', scope: 'one', notes: plan?.notes ?? ''
   };
   const initialKey = JSON.stringify(initial);
-  const editing = Boolean(plan);
+  const handledSave=useRef<number|undefined>(undefined);
   const [draft, setDraft] = useState(initial);
-  useEffect(() => { setDraft(JSON.parse(initialKey)); }, [initialKey]);
+  const dirty=useRef(false);
+  const revision=plan?.updated_at??'';
+  const seriesKey=JSON.stringify(Object.fromEntries(series.filter(item=>plan?.series_id&&item.series_id===plan.series_id).map(item=>[item.id,item.updated_at])));
+  const [baseline,setBaseline]=useState({revision,seriesKey});
+  useEffect(()=>{if(!dirty.current){setDraft(JSON.parse(initialKey));setBaseline({revision,seriesKey});}},[initialKey,revision,seriesKey]);
   useEffect(() => {
-    if (state.savedAt && !editing) setDraft(JSON.parse(initialKey));
-  }, [state.savedAt, editing, initialKey]);
-  const bind = (name: string) => ({ value: draft[name] ?? '', onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { const value = event.target.value; setDraft(current => ({ ...current, [name]: value })); } });
+    if(state.savedAt&&state.savedAt!==handledSave.current){handledSave.current=state.savedAt;dirty.current=false;setBaseline({revision,seriesKey});setDraft(JSON.parse(initialKey));}
+  }, [state.savedAt, initialKey,revision,seriesKey]);
+  const bind = (name: string) => ({ value: draft[name] ?? '', onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { const value = event.target.value; dirty.current=true; setDraft(current => ({ ...current, [name]: value })); } });
   return <form action={action} className="space-y-3">
-    <input type="hidden" name="expected_updated_at" value={plan?.updated_at ?? ''} />
-    <input type="hidden" name="series_revisions" value={JSON.stringify(Object.fromEntries(series.filter(item=>plan?.series_id && item.series_id===plan.series_id).map(item=>[item.id,item.updated_at])))} />
+    <input type="hidden" name="expected_updated_at" value={baseline.revision} />
+    <input type="hidden" name="series_revisions" value={baseline.seriesKey} />
     <input type="hidden" name="return_to" value={returnTo} />
     <input type="hidden" name="return_date" value={plan?.scheduled_date ?? date} />
     {state.error && <p role="alert" className="rounded bg-red-50 p-3 text-red-800">{state.error}</p>}

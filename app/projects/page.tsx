@@ -1,5 +1,4 @@
 import { planningContext, planningData } from '@/lib/planning-data';
-import { readAllRows } from '@/lib/paginated-query';
 import { ProjectForm } from '@/components/planning-forms';
 import { PlanCard } from '@/components/plan-card';
 import { PlanForm } from '@/components/plan-form';
@@ -10,8 +9,12 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
   const context = await planningContext();
   const { schedules, projects, skills } = await planningData(context);
-  const sessions = await readAllRows<{ schedule_id: string | null; duration_sec: number | null }>((from,to) => context.supabase.from('focus_sessions')
-    .select('schedule_id,duration_sec').eq('user_id',context.user.id).order('id').range(from,to));
+  const {data:totals,error}=await context.supabase.rpc('task_focus_totals',{p_ids:schedules.map(item=>item.id)});
+  if(error)throw error;
+  const sessions: {schedule_id:string;duration_sec:number}[]=(totals??[]).map((item:{schedule_id:string;seconds:number})=>({schedule_id:item.schedule_id,duration_sec:Number(item.seconds)}));
+  const {data:projectTotals,error:projectError}=await context.supabase.rpc('project_focus_totals');
+  if(projectError)throw projectError;
+  const projectSeconds=new Map<string,number>((projectTotals??[]).map((row:{project_id:string;seconds:number})=>[row.project_id,Number(row.seconds)]));
   return <main className="mx-auto max-w-5xl px-4 py-10">
     <h1 className="text-3xl font-bold">Projects & Goals</h1><p className="mt-2 mb-6 text-slate-600">Connect daily actions to something bigger. Project completion is a separate choice from task completion.</p>
     {typeof params.error === 'string' && <p role="alert" className="mb-4 text-red-800">{params.error}</p>}
@@ -21,8 +24,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
         {projects.map(project => {
           const tasks = schedules.filter(item => item.project_id === project.id && !item.deleted_at);
           const completed = tasks.filter(item => item.is_done).length;
-          const ids = new Set(schedules.filter(item => item.project_id === project.id).map(item => item.id));
-          const minutes = Math.floor(sessions.filter(item => item.schedule_id && ids.has(item.schedule_id)).reduce((sum,item) => sum + (item.duration_sec ?? 0),0) / 60);
+          const minutes=Math.floor((projectSeconds.get(project.id)??0)/60);
           return <article key={project.id} className="rounded-lg border bg-white p-5">
             <h2 className="break-words text-xl font-semibold">{project.name}{project.is_done ? ' · Completed' : ''}</h2>
             {project.description && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-600">{project.description}</p>}
@@ -30,7 +32,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
             <progress aria-label={`${project.name} progress`} value={completed} max={Math.max(1,tasks.length)} className="mb-3 w-full accent-slate-900" />
             <form action={toggleProject.bind(null,project.id,!project.is_done)}><SubmitButton label={project.is_done ? 'Reopen project' : 'Mark project complete'} /></form>
             <details className="mt-4"><summary className="cursor-pointer font-medium">Steps and next actions</summary>
-              <ul className="my-4 space-y-3">{tasks.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/projects" actualMinutes={sessions.filter(s => s.schedule_id === plan.id).reduce((sum,s) => sum+(s.duration_sec??0),0)/60} />)}</ul>
+              <ul className="my-4 space-y-3">{tasks.map(plan => <PlanCard series={schedules} key={plan.id} plan={plan} projects={projects} skills={skills} returnTo="/projects" actualMinutes={sessions.some(s=>s.schedule_id===plan.id) ? sessions.find(s=>s.schedule_id===plan.id)!.duration_sec/60 : undefined} />)}</ul>
               <h3 className="mb-3 font-semibold">Add a step</h3><PlanForm returnTo="/projects" projects={projects} skills={skills} projectId={project.id} />
             </details>
           </article>;
