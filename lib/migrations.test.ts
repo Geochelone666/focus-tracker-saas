@@ -83,9 +83,9 @@ describe("supabase migrations", () => {
     expect(result.rows).toHaveLength(19);
     for (const policy of result.rows) {
       const conditions = [policy.qual, policy.with_check].filter(Boolean).join(" ");
-      expect(conditions, policy.policyname).toMatch(/select\\s+auth\\.uid\\(\\)/i);
-      const withoutCachedIdentity = conditions.replace(/select\\s+auth\\.uid\\(\\)/gi, "");
-      expect(withoutCachedIdentity, policy.policyname).not.toMatch(/auth\\.uid\\(\\)/i);
+      expect(conditions, policy.policyname).toMatch(/select\s+auth\.uid\(\)/i);
+      const withoutCachedIdentity = conditions.replace(/select\s+auth\.uid\(\)/gi, "");
+      expect(withoutCachedIdentity, policy.policyname).not.toMatch(/auth\.uid\(\)/i);
     }
   });
 
