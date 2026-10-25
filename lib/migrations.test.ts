@@ -14,7 +14,7 @@ async function migrationFiles() {
 }
 
 /** Minimal stand-in for the Supabase auth schema and default grants. */
-async function freshDatabase() {
+async function freshDatabase(includeFocus = true) {
   const db = new PGlite();
   await db.exec(`
     create role anon; create role authenticated; create role service_role bypassrls;
@@ -28,6 +28,7 @@ async function freshDatabase() {
     alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
   `);
   for (const file of await migrationFiles()) {
+    if (!includeFocus && file === "20261025000000_focus_state.sql") continue;
     const sql = await readFile(path.join(migrationsDir, file), "utf8");
     // PGlite ships without pgcrypto; gen_random_uuid() is built into PostgreSQL 13+.
     await db.exec(sql.replace(/create extension if not exists pgcrypto;/i, ""));
@@ -113,5 +114,34 @@ describe("supabase migrations", () => {
     } finally {
       await db.exec("reset role");
     }
+  });
+});
+
+
+describe("focus upgrade and rollback", () => {
+  it("preserves legacy history, upgrades an active row, reruns and rolls back without dropping data", async () => {
+    db = await freshDatabase(false);
+    const history = (await db.query<{ id: string }>("insert into public.focus_sessions(user_id,started_at,ended_at,duration_sec,note) values($1,'2026-10-01T12:00:00Z','2026-10-01T13:00:00Z',3600,'legacy outcome') returning id",[owner])).rows[0];
+    const active = (await db.query<{ id: string }>("insert into public.focus_sessions(user_id,started_at) values($1,'2026-10-23T12:00:00Z') returning id",[owner])).rows[0];
+    const sql = await readFile(path.join(migrationsDir,"20261025000000_focus_state.sql"),"utf8");
+    await db.exec(sql);
+    const saved = (await db.query("select started_at,ended_at,duration_sec,note from public.focus_sessions where id=$1",[history.id])).rows[0];
+    expect(saved).toMatchObject({duration_sec:3600,note:'legacy outcome'});
+    expect((await db.query("select focus_status,resumed_at=started_at as original from public.focus_sessions where id=$1",[active.id])).rows[0]).toEqual({focus_status:'running',original:true});
+    await asUser(owner,()=>db!.query("select * from public.transition_focus($1,0,'pause')",[active.id]));
+    const paused = (await db.query("select * from public.focus_sessions where id=$1",[active.id])).rows[0];
+    await db.exec(sql);
+    expect((await db.query("select * from public.focus_sessions where id=$1",[active.id])).rows[0]).toEqual(paused);
+    await asUser(owner,()=>db!.query("select * from public.transition_focus($1,1,'abandon')",[active.id]));
+    await db.exec(`begin;
+      do $$ begin if exists(select 1 from public.focus_sessions where ended_at is null) then raise exception 'Finish active sessions before downgrade'; end if; end $$;
+      drop trigger focus_state_guard on public.focus_sessions;
+      drop function public.transition_focus(uuid,integer,text,text,uuid);
+      drop function public.guard_focus_state();
+      commit;`);
+    expect((await db.query("select started_at,ended_at,duration_sec,note from public.focus_sessions where id=$1",[history.id])).rows[0]).toEqual(saved);
+    expect((await db.query("select count(*)::int as total from public.focus_sessions")).rows[0]).toEqual({total:2});
+    await db.exec(sql);
+    expect((await db.query("select focus_status,duration_sec from public.focus_sessions where id=$1",[active.id])).rows[0]).toEqual({focus_status:'abandoned',duration_sec:0});
   });
 });

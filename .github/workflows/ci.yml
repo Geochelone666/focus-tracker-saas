@@ -81,6 +81,9 @@ jobs:
           for i in $(seq 60); do curl -sf -o /dev/null http://localhost:3000 && break; sleep 1; done
           BASE_URL=http://localhost:3000 npm run test:e2e
 
+      - name: Focus state end-to-end (local migrated database)
+        run: node scripts/e2e-focus.mjs
+
       - name: Server log on failure
         if: failure()
         run: tail -100 server.log
