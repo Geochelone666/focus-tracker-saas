@@ -6,7 +6,7 @@
 - Share focus controls on Today and Dashboard, with outcome notes, silent countdown completion and refresh recovery.
 - Preserve completed history and owner/AI boundaries in additive migration `20261025000000_focus_state.sql`; deploy it before application changes.
 - Add focus SQL, unit/action and authenticated fixture-backed browser regressions, plus the V1 audit/delivery queue and rollback instructions.
-- Break cycles and the complete capture-to-review flow remain outstanding; no production verification is claimed.
+- Subsequent batches add break cycles and fixture-verified capture-to-review coverage (see below); hosted production verification remains outstanding.
 
 ## Unreleased — phone notifications
 
