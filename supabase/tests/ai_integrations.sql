@@ -17,14 +17,20 @@ do $$ declare r jsonb; s jsonb; k text='ft_'||repeat('a',64); begin
  if (public.integration_api('ft_'||repeat('b',64),'create_schedule','{"title":"Denied"}')->>'status')::integer<>403 then raise exception 'Read key wrote'; end if;
  if (public.integration_api(k,'get_schedule','{"id":"c2222222-2222-4222-8222-222222222222"}')->>'status')::integer<>404 then raise exception 'Foreign row visible'; end if;
  if (public.integration_api(k,'create_schedule','{"title":"Bad link","project_id":"a2222222-2222-4222-8222-222222222222"}')->>'status')::integer<>400 then raise exception 'Foreign project linked'; end if;
+ -- AI calls are SECURITY DEFINER and must not bypass the local DST time guard.
+ if (public.integration_api(k,'create_schedule','{"title":"DST gap","scheduled_date":"2026-03-08","scheduled_time":"02:30"}')->>'status')::integer<>400 then raise exception 'AI accepted nonexistent DST time on create'; end if;
  r=public.integration_api(k,'create_schedule','{"title":"AI QA task"}');
  if (r->>'status')::integer<>200 then raise exception 'Create failed: %',r; end if;
  s=r->'data';
  if s ? 'user_id' then raise exception 'Owner metadata exposed'; end if;
+ r=public.integration_api(k,'update_schedule',
+  jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','scheduled_date','2026-03-08','scheduled_time','02:30'));
+ if (r->>'status')::integer<>400 then raise exception 'AI accepted nonexistent DST time on update'; end if;
  r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','is_done',true));
  if (r->>'status')::integer<>409 then raise exception 'Unversioned update accepted'; end if;
- r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','is_done',true));
+ r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','is_done',true,'scheduled_date','2026-11-01','scheduled_time','01:30'));
  if (r->>'status')::integer<>200 or not (r->'data'->>'is_done')::boolean then raise exception 'Complete failed'; end if;
+ if (r->'data'->>'scheduled_date')<>'2026-11-01' or (r->'data'->>'scheduled_time')::time<>time '01:30' then raise exception 'Valid fall-back wall time rejected'; end if;
  if (public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','title','Stale'))->>'status')::integer<>409 then raise exception 'Stale edit accepted'; end if;
  s=r->'data';
  r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','trashed',true));
