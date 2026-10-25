@@ -47,4 +47,14 @@ describe('timezone-aware planning', () => {
     const items = [{ id: 'gap', title: 'Invalid time', scheduled_date: '2026-03-08', scheduled_time: '02:00:00' }];
     expect(dueSoon(items, new Date('2026-03-08T06:55:00Z'), 'America/Toronto')).toEqual([]);
   });
+  it('uses the second occurrence of repeated local minutes, matching server pushes', () => {
+    const item={id:'fold',title:'DST fold',scheduled_date:'2026-11-01',scheduled_time:'01:30:00'};
+    // This is the FIRST 01:25 (EDT): the backend intentionally chooses 06:30Z.
+    expect(dueSoon([item],new Date('2026-11-01T05:25:00Z'),'America/Toronto')).toEqual([]);
+    // This is the SECOND 01:25 (EST): the scheduled instant is truly 5m ahead.
+    expect(dueSoon([item],new Date('2026-11-01T06:25:00Z'),'America/Toronto')).toEqual([item]);
+    expect(dueSoon([item],new Date('2026-11-01T06:30:45Z'),'America/Toronto')).toEqual([item]);
+    expect(dueSoon([item],new Date('2026-11-01T06:31:00Z'),'America/Toronto')).toEqual([]);
+  });
+
 });
