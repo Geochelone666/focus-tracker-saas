@@ -75,6 +75,20 @@ describe("supabase migrations", () => {
   });
 
 
+  it("caches owner identity in RLS policies without changing ownership checks", async () => {
+    db = await freshDatabase();
+    const result = await db.query<{ tablename: string; policyname: string; qual: string | null; with_check: string | null }>(
+      "select tablename,policyname,qual,with_check from pg_policies where schemaname='public' and tablename in ('profiles','skills','projects','schedules','daily_reflections','integration_tokens','integration_activity','focus_sessions','focus_segments') order by tablename,policyname"
+    );
+    expect(result.rows).toHaveLength(19);
+    for (const policy of result.rows) {
+      const conditions = [policy.qual, policy.with_check].filter(Boolean).join(" ");
+      expect(conditions, policy.policyname).toMatch(/select\s+auth\.uid\(\)/i);
+      const withoutCachedIdentity = conditions.replace(/select\s+auth\.uid\(\)/gi, "");
+      expect(withoutCachedIdentity, policy.policyname).not.toMatch(/auth\.uid\(\)/i);
+    }
+  });
+
   it("keeps schedule ownership on focus sessions after the last migration", async () => {
     db = await freshDatabase();
     const foreign = (
