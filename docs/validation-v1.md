@@ -1,6 +1,6 @@
 # Focus Track V1 validation receipt
 
-Web workflow implemented in four stacked branches, integrated with main `5a14a30` (phone reminders, auth trigger hardening and optional Expo source). No production migrations, environment variables, credentials or service permissions were changed. No PR was automatically merged.
+Web workflow implemented in four stacked branches, integrated with main `5a14a30` (phone reminders, auth trigger hardening and optional Expo source). No production migrations, environment variables, credentials or service permissions were changed. The user subsequently authorized merging; all four batches are included in main at `991cceb903adf4bd0de32993d3589be5feb0c205`.
 
 ## Verified locally
 
@@ -29,6 +29,6 @@ These are unreleased additive migrations. Their versions were changed before rel
 
 ## Review and external acceptance
 
-Draft PRs are stacked in batch order: #48 (base main), #49 (base batch 1), #50 (base batch 2), and the planned/actual PR (base batch 3). Review and merge in this order; the agent does not merge them. CI and Vercel deployment status are reported separately from authenticated application behavior.
+PRs #48–51 are merged following explicit user authorization. #48 merged into main; #49 merged into the batch-1 branch; #50 brought the batch-2 and batch-3 changes into main; #51 brought analytics into main. The resulting main tree is identical to the validated #51 head `9d41d61`. Main CI is checked separately from the previously successful PR checks. CI and Vercel deployment status do not establish authenticated hosted application behavior.
 
 Still unverified: real Supabase/GoTrue/PostgREST, hosted migrations and ownership policies, real email login, physical phone/desktop consistency, OS sound/notification delivery and production behavior. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are absent from this runtime and no `.env.local` exists. A dedicated test project, migrations and usable test accounts are required to continue those checks; provide credentials through secure environment settings, never chat. Existing proxy authentication is sufficient for GitHub PR creation.
