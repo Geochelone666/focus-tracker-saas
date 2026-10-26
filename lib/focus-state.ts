@@ -2,6 +2,7 @@ export const FOCUS_COLUMNS = 'id,started_at,skill_id,schedule_id,focus_mode,targ
 export type FocusSession = {
   session_kind?: 'focus' | 'short_break' | 'long_break'; break_duration_sec?: number; project_id?: string | null;
   cycle_number?: number; cycle_count?: number; short_break_seconds?: number; long_break_seconds?: number; long_break_every?: number; cycle_focus_seconds?: number | null; previous_session_id?: string | null;
+  note?:string|null;
   id: string; started_at: string; skill_id: string | null; schedule_id: string | null;
   focus_mode: 'elapsed' | 'countdown'; target_seconds: number | null;
   focus_status: 'running' | 'paused' | 'completed' | 'abandoned';

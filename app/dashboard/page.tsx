@@ -110,7 +110,7 @@ export default async function DashboardPage({
           <p role="alert" className="mt-4 text-red-800">Couldn&apos;t load the running session. Please refresh to try again.</p>
         ) : (
           <>
-            {!latest && sessions?.[0] && <FocusNext key={sessions[0].id} session={sessions[0] as unknown as FocusSession} />}
+            {!latest && sessions?.[0] && <FocusNext key={sessions[0].id} session={sessions[0] as unknown as FocusSession} skills={skills ?? []} />}
             {latest && <FocusControls key={latest.id} session={latest} skills={skills ?? []} observedAt={Date.now()} />}
             <div className="mt-4 flex flex-wrap gap-3">
               {activeState === "none" && <form action={startSession} className="flex min-w-0 flex-wrap items-center gap-3">

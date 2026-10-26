@@ -25,7 +25,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const { data: running, error: runningError } = await supabase.from('focus_sessions').select(FOCUS_COLUMNS).eq('user_id',user.id).is('ended_at',null).maybeSingle();
   if (runningError) throw runningError;
   const active = running as FocusSession | null;
-  const { data: lastPhase } = await supabase.from('focus_sessions').select(FOCUS_COLUMNS).eq('user_id',user.id).order('started_at',{ascending:false}).limit(1).maybeSingle();
+  const { data: lastPhase } = await supabase.from('focus_sessions').select(`${FOCUS_COLUMNS},note`).eq('user_id',user.id).order('started_at',{ascending:false}).limit(1).maybeSingle();
   const activePlan = active ? live.find(plan => plan.id === active.schedule_id) : null;
   const focused=Number(dayReport.days[0]?.focus_seconds??0)/60;
   const estimated = plannedMinutes(plans);
@@ -44,7 +44,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     </div>
     <p className="mb-4 text-sm">Today: {dayReport.days[0]?.planned_minutes===null?'no estimates':`${dayReport.days[0]?.planned_minutes ?? 0}m total planned`} · {Math.floor(focused)}m actual focus · {Math.floor(Number(dayReport.days[0]?.break_seconds??0)/60)}m breaks. <Link href="/review" className="underline">Compare plan and actual →</Link></p>
     {estimated > 480 && <p role="status" className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900">More than 8 hours are planned. Consider moving a few items or leaving room for breaks.</p>}
-    {!active && lastPhase && <FocusNext key={lastPhase.id} session={lastPhase as FocusSession} />}
+    {!active && lastPhase && <FocusNext key={lastPhase.id} session={lastPhase as FocusSession} skills={skills} />}
     {active && <section className="mb-6 rounded-lg border bg-white p-5">
       <h2 className="font-semibold">Focusing{activePlan ? `: ${activePlan.title}` : ''}</h2>
       <FocusControls key={active.id} session={active} skills={skills} observedAt={Date.now()} />
