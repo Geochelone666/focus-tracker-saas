@@ -10,6 +10,7 @@ insert into public.integration_tokens(user_id,name,token_hash,scope,expires_at) 
  (current_setting('test.owner')::uuid,'QA expired',encode(sha256(convert_to('ft_'||repeat('c',64),'UTF8')),'hex'),'write',now()-interval '1 day');
 insert into public.projects(id,user_id,name) values('a2222222-2222-4222-8222-222222222222',current_setting('test.other')::uuid,'Foreign QA project');
 insert into public.schedules(id,user_id,title) values('c2222222-2222-4222-8222-222222222222',current_setting('test.other')::uuid,'Foreign QA task');
+insert into public.skills(id,user_id,name) values ('a3333333-3333-4333-8333-333333333333',current_setting('test.owner')::uuid,'Owned QA skill'),('a4444444-4444-4444-8444-444444444444',current_setting('test.other')::uuid,'Foreign QA skill');
 set local role anon;
 do $$ declare r jsonb; s jsonb; k text='ft_'||repeat('a',64); begin
  if (public.integration_api('bad','list_schedules')->>'status')::integer<>401 then raise exception 'Bad key accepted'; end if;
@@ -17,20 +18,27 @@ do $$ declare r jsonb; s jsonb; k text='ft_'||repeat('a',64); begin
  if (public.integration_api('ft_'||repeat('b',64),'create_schedule','{"title":"Denied"}')->>'status')::integer<>403 then raise exception 'Read key wrote'; end if;
  if (public.integration_api(k,'get_schedule','{"id":"c2222222-2222-4222-8222-222222222222"}')->>'status')::integer<>404 then raise exception 'Foreign row visible'; end if;
  if (public.integration_api(k,'create_schedule','{"title":"Bad link","project_id":"a2222222-2222-4222-8222-222222222222"}')->>'status')::integer<>400 then raise exception 'Foreign project linked'; end if;
+ r=public.integration_api(k,'list_skills','{}');
+ if (r->>'status')::integer<>200 or jsonb_array_length(r->'data')<>1
+ or r->'data'->0->>'id'<>'a3333333-3333-4333-8333-333333333333'
+ or r->'data'->0 ? 'user_id' then raise exception 'AI skill discovery leaked owners: %',r; end if;
+ if (public.integration_api('ft_'||repeat('b',64),'list_skills','{}')->>'status')::integer<>200 then raise exception 'Read-only key could not discover skills'; end if;
  -- AI calls are SECURITY DEFINER and must not bypass the local DST time guard.
  if (public.integration_api(k,'create_schedule','{"title":"DST gap","scheduled_date":"2026-03-08","scheduled_time":"02:30"}')->>'status')::integer<>400 then raise exception 'AI accepted nonexistent DST time on create'; end if;
- r=public.integration_api(k,'create_schedule','{"title":"AI QA task"}');
+ r=public.integration_api(k,'create_schedule','{"title":"AI QA task","deadline":"2026-11-03","skill_id":"a3333333-3333-4333-8333-333333333333"}');
  if (r->>'status')::integer<>200 then raise exception 'Create failed: %',r; end if;
  s=r->'data';
  if s ? 'user_id' then raise exception 'Owner metadata exposed'; end if;
+ if s->>'deadline'<>'2026-11-03' or s->>'skill_id'<>'a3333333-3333-4333-8333-333333333333' then raise exception 'AI created task lost deadline/skill'; end if;
  r=public.integration_api(k,'update_schedule',
   jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','scheduled_date','2026-03-08','scheduled_time','02:30'));
  if (r->>'status')::integer<>400 then raise exception 'AI accepted nonexistent DST time on update'; end if;
  r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','is_done',true));
  if (r->>'status')::integer<>409 then raise exception 'Unversioned update accepted'; end if;
- r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','is_done',true,'scheduled_date','2026-11-01','scheduled_time','01:30'));
+ r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','is_done',true,'scheduled_date','2026-11-01','scheduled_time','01:30','deadline',null));
  if (r->>'status')::integer<>200 or not (r->'data'->>'is_done')::boolean then raise exception 'Complete failed'; end if;
  if (r->'data'->>'scheduled_date')<>'2026-11-01' or (r->'data'->>'scheduled_time')::time<>time '01:30' then raise exception 'Valid fall-back wall time rejected'; end if;
+ if r->'data'->>'deadline' is not null then raise exception 'AI failed to clear task deadline'; end if;
  if (public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','title','Stale'))->>'status')::integer<>409 then raise exception 'Stale edit accepted'; end if;
  s=r->'data';
  r=public.integration_api(k,'update_schedule',jsonb_build_object('id',s->>'id','expected_updated_at',s->>'updated_at','trashed',true));
