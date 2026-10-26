@@ -4,6 +4,7 @@ const mocks=vi.hoisted(()=>({
  update:vi.fn(),eq:vi.fn(),not:vi.fn(),select:vi.fn(),maybeSingle:vi.fn(),from:vi.fn()
 }));
 vi.mock('@/supabase/server',()=>({createClient:mocks.createClient}));
+vi.mock('@/lib/validation',()=>import('../../lib/validation'));
 vi.mock('next/cache',()=>({revalidatePath:mocks.revalidatePath}));
 import {saveCompletedFocusOutcome} from './focus-actions';
 const id='11111111-1111-4111-8111-111111111111';
