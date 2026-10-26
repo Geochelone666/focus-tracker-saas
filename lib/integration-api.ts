@@ -5,6 +5,7 @@ export const fields = {
   title: { type: 'string', minLength: 1, maxLength: 120 },
   scheduled_date: { type: ['string','null'], format: 'date' },
   scheduled_time: { type: ['string','null'], pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' },
+  deadline: { type: ['string','null'], format: 'date' },
   notes: { type: ['string','null'], maxLength: 2000 },
   priority: { type: 'string', enum: ['low','normal','high'] },
   estimated_minutes: { type: ['integer','null'], minimum: 1, maximum: 1440 },
@@ -17,9 +18,10 @@ export const operations = {
   list_schedules: { description: 'List schedules, ordered by calendar date then id. Dates/times use the account timezone. Default excludes trash. Paginate with offset until an empty page.', properties: { from: {type:'string',format:'date'}, to: {type:'string',format:'date'}, inbox:{type:'boolean'}, trash:{type:'boolean'}, is_done:{type:'boolean'}, limit:{type:'integer',minimum:1,maximum:100}, offset:{type:'integer',minimum:0} }, required: [] as string[] },
   get_schedule: { description: 'Get one schedule, including its updated_at revision. Read before editing.', properties: {id:{type:'string',format:'uuid'}}, required:['id'] },
   list_projects: { description: 'List owned projects, 100 per page. Increase offset until empty.', properties:{offset:{type:'integer',minimum:0}}, required:[] as string[] },
+  list_skills: { description: 'List owned skill IDs and names, 100 per page. Use IDs when linking a schedule to a skill.', properties:{offset:{type:'integer',minimum:0}}, required:[] as string[] },
   get_profile: { description: 'Read account timezone and daily focus target. Interpret all schedule dates and wall times in this timezone.', properties:{}, required:[] as string[] },
-  create_schedule: { description: 'Create one schedule. Omit date/time for inbox. A time requires a date. Creates a single occurrence; no recurrence expansion. Confirm the user intent before writing. Do not retry blindly after a network timeout: check for an existing schedule first.', properties:fields, required:['title'] },
-  update_schedule: { description: 'Edit one occurrence, mark complete, move to trash (trashed=true), or restore (trashed=false). First fetch the schedule and supply its exact updated_at as expected_updated_at. On conflict, read again and ask before overwriting. Trash is reversible; no permanent deletion. Ask before removing tasks or making broad changes.', properties:{...fields,id:{type:'string',format:'uuid'},expected_updated_at:{type:'string',format:'date-time'},trashed:{type:'boolean'}}, required:['id','expected_updated_at'] }
+  create_schedule: { description: 'Create one schedule, optionally with a deadline. Omit date/time for inbox. A time requires a date. Creates a single occurrence; no recurrence expansion. Confirm the user intent before writing. Do not retry blindly after a network timeout: check for an existing schedule first.', properties:fields, required:['title'] },
+  update_schedule: { description: 'Edit one occurrence, including its deadline; mark complete, move to trash (trashed=true), or restore (trashed=false). First fetch the schedule and supply its exact updated_at as expected_updated_at. On conflict, read again and ask before overwriting. Trash is reversible; no permanent deletion. Ask before removing tasks or making broad changes.', properties:{...fields,id:{type:'string',format:'uuid'},expected_updated_at:{type:'string',format:'date-time'},trashed:{type:'boolean'}}, required:['id','expected_updated_at'] }
 };
 export type Operation = keyof typeof operations;
 export function schema(operation: Operation) {
