@@ -47,12 +47,12 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub',current_setting('test.owner'),true);
 do $qa$ begin
   if has_schema_privilege('authenticated','focus_internal','usage') then raise exception 'Internal scheduler schema exposed'; end if;
-  if has_function_privilege('authenticated','focus_internal.complete_expired_countdowns(integer)','execute') then raise exception 'Internal scheduler function exposed'; end if;
+  if exists(select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace where n.nspname='focus_internal' and p.proname='complete_expired_countdowns' and has_function_privilege('authenticated',p.oid,'execute')) then raise exception 'Internal scheduler function exposed'; end if;
 end $qa$;
 reset role;
 set local role anon;
 do $qa$ begin
-  if has_function_privilege('anon','focus_internal.complete_expired_countdowns(integer)','execute') then raise exception 'Anonymous users can finalize sessions'; end if;
+  if exists(select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace where n.nspname='focus_internal' and p.proname='complete_expired_countdowns' and has_function_privilege('anon',p.oid,'execute')) then raise exception 'Anonymous users can finalize sessions'; end if;
 end $qa$;
 reset role;
 rollback;
