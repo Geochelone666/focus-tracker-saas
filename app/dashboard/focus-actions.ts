@@ -44,3 +44,38 @@ export async function nextFocusPhase(_state: FocusResult, form: FormData): Promi
     return { saved: true };
   } catch { return { error: 'Could not connect. Try again.' }; }
 }
+
+/**
+ * A background-finalized countdown must still accept its outcome and skill.
+ * Timing fields are never part of the mutation. Owner RLS, completed status
+ * and focus_revision enforce account isolation and stale-device rejection.
+ */
+export async function saveCompletedFocusOutcome(_state:FocusResult,form:FormData):Promise<FocusResult>{
+ let id:string,revision:number,note:string|null,skill:string|null;
+ try{
+  id=validateId(form.get('session_id'));
+  const raw=form.get('focus_revision');
+  if(typeof raw!=='string'||!/^\d+$/.test(raw))throw new Error();
+  revision=Number(raw);
+  if(!Number.isSafeInteger(revision)||revision>2147483647)throw new Error();
+  const value=form.get('note')??'';
+  if(typeof value!=='string')throw new Error();
+  note=validateSessionNote(value);
+  skill=validateOptionalSkillId(form.get('skill_id'));
+ }catch{return{error:'Choose a valid skill and a note of up to 200 characters. Refresh if the session changed.'};}
+ try{
+  const supabase=await createClient();
+  const {data:{user},error:authError}=await supabase.auth.getUser();
+  if(authError||!user)return{error:'Please sign in again before saving the outcome.'};
+  const {data,error}=await supabase.from('focus_sessions')
+   .update({note,skill_id:skill})
+   .eq('id',id).eq('user_id',user.id)
+   .eq('focus_status','completed').not('ended_at','is',null)
+   .eq('focus_revision',revision)
+   .select('id').maybeSingle();
+  if(error)return{error:'Could not save outcome. Confirm the skill belongs to your account and try again.'};
+  if(!data)return{error:'This session changed on another device or is not completed. Refresh before trying again.'};
+  for(const path of ['/dashboard','/today','/skills','/history','/review'])revalidatePath(path);
+  return{saved:true};
+ }catch{return{error:'Could not connect. Your note is still in this form. Try again.'};}
+}
