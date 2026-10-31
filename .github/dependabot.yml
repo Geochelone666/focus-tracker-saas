@@ -17,6 +17,17 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 2
+    # react, react-native and expo-* packages are version-locked to the Expo
+    # SDK (enforced by `expo install --check` in CI): they only move with a
+    # deliberate SDK upgrade, so Dependabot must not bump them on its own.
+    # Red PRs #43 and #46 came from exactly those incompatible bumps.
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "react"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-safe-area-context"
+      - dependency-name: "@types/react"
     groups:
       mobile-nonmajor:
         patterns: ["*"]
