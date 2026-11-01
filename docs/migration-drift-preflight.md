@@ -8,7 +8,7 @@ From the repository root, with Node.js 22 or 24:
 
 ```sh
 node scripts/migration-drift-preflight.mjs --local-only
-node --test scripts/migration-drift-preflight.test.mjs
+node --test scripts/migration-drift-preflight.node-tests.mjs
 ```
 
 Local-only checks SQL migration filename format, duplicate versions and an empty directory. A passing result says **LOCAL_ONLY**, not that production is in sync. CI runs both commands without network access, credentials, database clients, or changes to SQL files.
