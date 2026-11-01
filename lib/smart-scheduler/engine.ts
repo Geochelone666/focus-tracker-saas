@@ -13,7 +13,8 @@ type Occupied = Interval & { taskId?: string };
 function instant(value: string): number {
   if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?Z$/.test(value)) throw new Error('Expected ISO UTC instant');
   const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new Error('Invalid UTC instant');
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0,19) !== value.slice(0,19))
+    throw new Error('Invalid UTC instant');
   return parsed;
 }
 const iso = (value: number) => new Date(value).toISOString();
@@ -87,8 +88,9 @@ function candidateFor(
   let best: number | null = null, bestCost = Infinity;
   for (const window of availability) {
     const first = Math.ceil(Math.max(window.start,task.earliest)/slotMs)*slotMs;
-    const latest = Math.min(window.end,horizonEnd,task.deadline)-task.minutes*MINUTE-bufferMs;
-    for (let start = first; start <= latest; start += slotMs) {
+    const latest = Math.min(window.end,horizonEnd)-task.minutes*MINUTE-bufferMs;
+    const lastByDeadline = task.deadline-task.minutes*MINUTE;
+    for (let start = first; start <= Math.min(latest,lastByDeadline); start += slotMs) {
       const end = start+task.minutes*MINUTE+bufferMs;
       const overlap = conflicting(busy,start,end);
       if (overlap) {
@@ -138,7 +140,8 @@ export function scheduleTasks(input: SchedulerInput, mode: 'optimized' | 'baseli
     .map(w => ({start:Math.max(w.start,now),end:w.end})).filter(w => w.end>w.start));
   const horizonEnd = windows.reduce((max,w)=>Math.max(max,w.end),now);
   const fixed=input.fixedBlocks.map(toInterval).sort((a,b)=>a.start-b.start || a.end-b.end);
-  const busy: Occupied[]=fixed.map(x=>({ ...x }));
+  // Merge overlapping immutable events before binary-search collision checks.
+  const busy: Occupied[]=mergeIntervals(fixed).map(x=>({ ...x }));
   const warnings: ReasonCode[]=[];
   if (fixed.some((entry,i)=>i>0 && fixed[i-1].end>entry.start)) warnings.push('FIXED_BLOCKS_OVERLAP');
   const preferred=(input.preferredWindows ?? []).map(toInterval);
