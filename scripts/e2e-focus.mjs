@@ -263,10 +263,10 @@ try {
   await a.getByRole('button',{name:'Undo demo confirmation'}).click();
   await a.getByRole('combobox',{name:'Test condition'}).selectOption('submit');
   await a.getByRole('button',{name:'Confirm demo selection'}).click();
-  await a.getByRole('status').filter({hasText:'Simulated submit failure'}).waitFor();
+  await a.getByRole('alert').filter({hasText:'Simulated submit failure'}).waitFor();
   await a.getByRole('combobox',{name:'Test condition'}).selectOption('revision');
   await a.getByRole('button',{name:'Confirm demo selection'}).click();
-  await a.getByRole('status').filter({hasText:'Simulated stale revision'}).waitFor();
+  await a.getByRole('alert').filter({hasText:'Simulated stale revision'}).waitFor();
   await a.getByRole('combobox',{name:'Test condition'}).selectOption('network');
   await a.getByRole('button',{name:'Reload example'}).click();
   await a.getByRole('alert').filter({hasText:'Simulated network failure'}).waitFor();
