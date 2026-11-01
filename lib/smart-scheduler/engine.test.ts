@@ -96,6 +96,7 @@ describe('Smart Scheduler v1: feasible deterministic planning', () => {
       fixedBlocks:[{id:'meeting',kind:'event',...interval(10,11)}]}));
     expect(find(result,'a')?.startUtc).toBe(at(9));
     expect(result.changes.map(c=>c.taskId)).toEqual(['a']);
+    expect(find(result,'a')?.reasonCodes).toContain('MOVED_FIXED_CONFLICT');
     expect(result.metrics.hardViolations).toBe(0);
   });
   it('19 does not move unrelated accepted blocks', () => {
@@ -112,6 +113,7 @@ describe('Smart Scheduler v1: feasible deterministic planning', () => {
       previousPlacements:[{taskId:'a',startUtc:at(11),endUtc:at(11,30)}]}));
     expect(find(result,'a')?.startUtc).toBe(at(9));
     expect(result.metrics.movedAcceptedTasks).toBe(1);
+    expect(find(result,'a')?.reasonCodes).toContain('MOVED_INVALID_ACCEPTED');
   });
   it('21 excludes completed tasks', () => {
     const result=scheduleTasks(input([task('done',{completed:true}),task('open')]));
