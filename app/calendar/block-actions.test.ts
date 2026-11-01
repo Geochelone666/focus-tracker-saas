@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ context: vi.fn(), rpc: vi.fn(), revalidate: vi.fn() }));
 vi.mock("@/lib/planning-data", () => ({ planningContext: mocks.context }));
+vi.mock("@/lib/planning", () => import("../../lib/planning"));
+vi.mock("@/lib/calendar", () => import("../../lib/calendar"));
+vi.mock("@/lib/validation", () => import("../../lib/validation"));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 import { saveTimeBlock } from "./block-actions";
 
