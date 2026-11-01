@@ -2,7 +2,7 @@
 // No hosted Supabase, production credentials, or production data are used.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { chromium } from '@playwright/test';
@@ -212,7 +212,22 @@ try {
   await reschedule.getByRole('button',{name:'Save time block'}).click();await waitFor(async()=>(await calendarTask()).scheduled_date===today,'Replan failed');
   await a.getByRole('link',{name:'week',exact:true}).click();
   await a.getByRole('region',{name:'week time blocking'}).waitFor();
+  
+  const dayPicker=a.getByRole('combobox',{name:'Week day (mobile)'});
+  await dayPicker.waitFor();
+  const originalDay=await dayPicker.inputValue();
+  const alternateDay=await dayPicker.locator('option').evaluateAll(options=>options.map(x=>x.value).find(v=>v!==''));
+  const nextDay=alternateDay===originalDay?await dayPicker.locator('option').nth(1).getAttribute('value'):alternateDay;
+  assert.ok(nextDay && nextDay!==originalDay,'Mobile week must allow changing days');
+  await dayPicker.selectOption(nextDay);
+  assert.ok(await a.getByLabel('Timeline '+nextDay,{exact:true}).isVisible(),'Mobile selected day must be visible');
+  await dayPicker.selectOption(originalDay);
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile week overflow');
+  await mkdir('test-artifacts',{recursive:true});
+  await a.screenshot({path:'test-artifacts/f2-f02-calendar-mobile-390.png',fullPage:true});
+  await a.setViewportSize({width:1280,height:900});
+  await a.screenshot({path:'test-artifacts/f2-f02-calendar-desktop-1280.png',fullPage:true});
+  await a.setViewportSize({width:390,height:844});
   await a.screenshot({path:'/tmp/focus-v1-calendar-390.png',fullPage:true});
   await a.goto(base+'/today');
   const taskCard=a.locator('li').filter({has:a.getByRole('heading',{name:'Calendar captured task',exact:true})});

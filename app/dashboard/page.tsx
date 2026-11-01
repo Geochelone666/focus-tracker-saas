@@ -104,8 +104,8 @@ export default async function DashboardPage({
       )}
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-slate-900">Focus Summary (Last 7 Days)</h2>
-        <p className="mt-2 text-slate-700">Total focused time: {formatDuration(weeklyTotalSeconds)}</p>
+        <h2 className="text-lg font-semibold text-slate-900">Focus session</h2>
+        <p className="mt-2 text-sm text-slate-600">Start, pause, or resume here. Your progress summary follows below.</p>
         {activeSessionError ? (
           <p role="alert" className="mt-4 text-red-800">Couldn&apos;t load the running session. Please refresh to try again.</p>
         ) : (
