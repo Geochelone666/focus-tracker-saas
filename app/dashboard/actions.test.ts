@@ -16,6 +16,7 @@ vi.mock("next/navigation", () => ({
 import { cleanupDuplicateActiveSessions, discardStaleSession, resumeStaleSession, startSession, stopSession } from "./actions";
 
 describe("stopSession notes", () => {
+  const rpc = vi.fn();
   const query = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
@@ -28,13 +29,15 @@ describe("stopSession notes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    rpc.mockResolvedValue({ data: {}, error: null });
     query.maybeSingle.mockResolvedValue({
-      data: { id: "11111111-1111-4111-8111-111111111111", started_at: new Date(Date.now() - 60000).toISOString() },
+      data: { id: "11111111-1111-4111-8111-111111111111", started_at: new Date(Date.now() - 60000).toISOString(), focus_revision: 0 },
       error: null
     });
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }) },
-      from: vi.fn().mockReturnValue(query)
+      from: vi.fn().mockReturnValue(query),
+      rpc
     });
   });
 
@@ -51,10 +54,12 @@ describe("stopSession notes", () => {
 
     await expect(stopSession(form)).rejects.toThrow("Redirect: /dashboard");
 
-    expect(query.update).toHaveBeenCalledWith({
-      note: expected,
-      ended_at: expect.any(String),
-      duration_sec: expect.any(Number)
+    expect(rpc).toHaveBeenCalledWith("transition_focus", {
+      p_id: "11111111-1111-4111-8111-111111111111",
+      p_revision: 0,
+      p_action: "complete",
+      p_note: expected,
+      p_skill: null
     });
     expect(query.eq).toHaveBeenCalledWith("id", "11111111-1111-4111-8111-111111111111");
     expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
@@ -70,11 +75,12 @@ describe("stopSession notes", () => {
       "Redirect: /dashboard?error=" + encodeURIComponent("Please enter a note of 200 characters or fewer.")
     );
     expect(mocks.createClient).not.toHaveBeenCalled();
-    expect(query.update).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
 
 describe('session skill linking', () => {
+  const rpc = vi.fn();
   const skillId = '550e8400-e29b-41d4-a716-446655440000';
   const skills = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn() };
   const sessions = {
@@ -87,11 +93,12 @@ describe('session skill linking', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     skills.maybeSingle.mockResolvedValue({ data: { id: skillId }, error: null });
-    sessions.maybeSingle.mockResolvedValue({ data: { id: '11111111-1111-4111-8111-111111111111', started_at: new Date(Date.now() - 60000).toISOString() }, error: null });
+    rpc.mockResolvedValue({ data: {}, error: null });
+    sessions.maybeSingle.mockResolvedValue({ data: { id: '11111111-1111-4111-8111-111111111111', started_at: new Date(Date.now() - 60000).toISOString(), focus_revision: 0 }, error: null });
     sessions.insert.mockResolvedValue({ error: null });
     from.mockImplementation((table: string) => table === 'skills' ? skills : sessions);
     mocks.createClient.mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) }, from
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) }, from, rpc
     });
   });
 
@@ -103,8 +110,8 @@ describe('session skill linking', () => {
     await expect(action(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
     expect(skills.eq).toHaveBeenCalledWith('id', skillId);
     expect(skills.eq).toHaveBeenCalledWith('user_id', 'user-1');
-    expect(action === startSession ? sessions.insert : sessions.update).toHaveBeenCalledWith(expect.objectContaining({ skill_id: skillId }));
-    if (action === stopSession) expect(sessions.update).toHaveBeenCalledWith(expect.objectContaining({ note: 'deep work' }));
+    if (action === startSession) expect(sessions.insert).toHaveBeenCalledWith(expect.objectContaining({ skill_id: skillId }));
+    else expect(rpc).toHaveBeenCalledWith('transition_focus', {p_id:'11111111-1111-4111-8111-111111111111',p_revision:0,p_action:'complete',p_note:'deep work',p_skill:skillId});
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/skills');
   });
 
@@ -115,7 +122,7 @@ describe('session skill linking', () => {
     form.set('skill_id', skillId);
     await expect(action(form)).rejects.toThrow('Redirect: /dashboard?error=' + encodeURIComponent('That skill could not be found'));
     expect(sessions.insert).not.toHaveBeenCalled();
-    expect(sessions.update).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it.each([startSession, stopSession])('rejects a malformed skill before querying or writing', async (action) => {
@@ -141,14 +148,15 @@ describe('session skill linking', () => {
     if (value !== null) form.set('skill_id', value);
     form.set('note', 'finished');
     await expect(stopSession(form)).rejects.toThrow(/^Redirect: \/dashboard$/);
-    expect(sessions.update).toHaveBeenCalledWith({ ended_at: expect.any(String), duration_sec: expect.any(Number), note: 'finished' });
+    expect(rpc).toHaveBeenCalledWith('transition_focus',{p_id:'11111111-1111-4111-8111-111111111111',p_revision:0,p_action:'complete',p_note:'finished',p_skill:null});
     expect(from).not.toHaveBeenCalledWith('skills');
   });
 });
 
 describe("active session persistence", () => {
+  const rpc = vi.fn();
   const now = new Date("2026-09-29T12:00:00Z");
-  const stale = { id: "11111111-1111-4111-8111-111111111111", started_at: "2026-09-26T12:00:00Z" };
+  const stale = { id: "11111111-1111-4111-8111-111111111111", started_at: "2026-09-26T12:00:00Z", focus_revision: 0 };
   const query = {
     select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
@@ -170,31 +178,24 @@ describe("active session persistence", () => {
     query.then.mockImplementation((resolve) => Promise.resolve(result).then(resolve));
     query.maybeSingle.mockResolvedValue({ data: stale, error: null });
     query.insert.mockResolvedValue({ error: null });
+    rpc.mockResolvedValue({ data: {}, error: null });
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }) },
-      from: vi.fn().mockReturnValue(query)
+      from: vi.fn().mockReturnValue(query),rpc
     });
   });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
   it("pauses a stale row without rewriting its original start", async () => {
     await expect(resumeStaleSession()).rejects.toThrow(/^Redirect: \/dashboard$/);
-    expect(query.update).toHaveBeenCalledWith({ focus_status: "paused" });
-    expect(query.eq).toHaveBeenCalledWith("id", stale.id);
-    expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(query.eq).toHaveBeenCalledWith("started_at", stale.started_at);
-    expect(query.is).toHaveBeenCalledWith("ended_at", null);
+    expect(rpc).toHaveBeenCalledWith("transition_focus",{p_id:stale.id,p_revision:0,p_action:"pause"});
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
   });
 
   it("discards only the user's still-active stale row", async () => {
     await expect(discardStaleSession()).rejects.toThrow(/^Redirect: \/dashboard$/);
     expect(query.delete).not.toHaveBeenCalled();
-    expect(query.update).toHaveBeenCalledWith({ focus_status: "abandoned" });
-    expect(query.eq).toHaveBeenCalledWith("id", stale.id);
-    expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(query.eq).toHaveBeenCalledWith("started_at", stale.started_at);
-    expect(query.is).toHaveBeenCalledWith("ended_at", null);
+    expect(rpc).toHaveBeenCalledWith("transition_focus",{p_id:stale.id,p_revision:0,p_action:"abandon"});
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
   });
 
@@ -227,18 +228,16 @@ describe("active session persistence", () => {
     );
   });
 
-  it("ends duplicates at their own start with zero duration and keeps the latest", async () => {
+  it("abandons duplicate active sessions using their revisions and keeps the latest", async () => {
     const latest = { id: "latest", started_at: now.toISOString() };
     const oldest = { id: "oldest", started_at: "2026-09-25T12:00:00Z" };
     result = { data: [latest, stale, oldest], error: null };
     await cleanupDuplicateActiveSessions();
-    expect(query.update.mock.calls).toEqual([
-      [{ ended_at: stale.started_at, duration_sec: 0, focus_status: "abandoned" }],
-      [{ ended_at: oldest.started_at, duration_sec: 0, focus_status: "abandoned" }]
+    expect(rpc.mock.calls).toEqual([
+      ["transition_focus",{p_id:stale.id,p_revision:0,p_action:"abandon"}],
+      ["transition_focus",{p_id:oldest.id,p_revision:0,p_action:"abandon"}]
     ]);
-    expect(query.eq).not.toHaveBeenCalledWith("id", latest.id);
-    expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(query.is).toHaveBeenCalledWith("ended_at", null);
+    expect(rpc.mock.calls.some((call:unknown[]) => (call[1] as {p_id:string}).p_id===latest.id)).toBe(false);
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
