@@ -28,8 +28,8 @@ export default async function Notifications({searchParams}:{searchParams:Promise
  <WebNotifications userId={user.id}/>
  {error&&<p role="alert">Phone reminders are unavailable. The administrator needs to apply the mobile push migration.</p>}
  {!error&&!data?.length&&<p>No phones registered yet.</p>}
- {data?.map(device=><section key={device.id} className="rounded border bg-white p-5 space-y-2"><h2 className="font-semibold">{device.name}</h2><p>{device.platform==='ios'?'iPhone / iPad':device.platform==='android'?'Android':'Web app'} · {device.enabled?'Enabled':'Disabled'} · {device.lead_minutes===0?'At start':`${device.lead_minutes} minutes before`}</p><p className="text-sm text-slate-600">Last active: {new Date(device.last_seen_at).toLocaleString('en-US',{timeZone:zone})}</p><DisconnectDevice id={device.id}/></section>)}
- <section className="rounded border bg-white p-5 space-y-2">
+ {data?.map(device=><section key={device.id} className="rounded-sm border bg-white p-5 space-y-2"><h2 className="font-semibold">{device.name}</h2><p>{device.platform==='ios'?'iPhone / iPad':device.platform==='android'?'Android':'Web app'} · {device.enabled?'Enabled':'Disabled'} · {device.lead_minutes===0?'At start':`${device.lead_minutes} minutes before`}</p><p className="text-sm text-slate-600">Last active: {new Date(device.last_seen_at).toLocaleString('en-US',{timeZone:zone})}</p><DisconnectDevice id={device.id}/></section>)}
+ <section className="rounded-sm border bg-white p-5 space-y-2">
   <h2 className="text-lg font-semibold">Automatic reminder history</h2>
   <p className="text-sm text-slate-600">Shows recent scheduler attempts on your registered phones, not manually sent test notifications. “Accepted” means the push service accepted the message; your phone may still silence or delay it.</p>
   {history?.error&&<p role="alert" className="text-sm">Reminder history is temporarily unavailable.</p>}

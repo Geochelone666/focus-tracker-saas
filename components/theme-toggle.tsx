@@ -13,5 +13,5 @@ export function ThemeToggle() {
     const next = !dark; setDark(next); document.documentElement.dataset.theme = next ? 'dark' : 'light';
     try { localStorage.setItem('focus-theme',next ? 'dark' : 'light'); } catch { /* Theme still works for this visit. */ }
   }
-  return <button type="button" onClick={toggle} aria-pressed={dark} className="rounded border px-3 py-1.5 text-sm">{dark ? 'Light mode' : 'Dark mode'}</button>;
+  return <button type="button" onClick={toggle} aria-pressed={dark} className="rounded-sm border px-3 py-1.5 text-sm">{dark ? 'Light mode' : 'Dark mode'}</button>;
 }
