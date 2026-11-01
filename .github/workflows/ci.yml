@@ -41,7 +41,7 @@ jobs:
         run: node scripts/migration-drift-preflight.mjs --local-only --format json
 
       - name: Test migration preflight (offline fixtures)
-        run: node --test scripts/migration-drift-preflight.test.mjs
+        run: node --test scripts/migration-drift-preflight.node-tests.mjs
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
