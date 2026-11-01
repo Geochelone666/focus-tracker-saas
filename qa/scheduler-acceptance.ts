@@ -41,6 +41,10 @@ export function inspectSchedulerProposal(input: QAInput, output: QAProposal): st
     seen.add(assignment.taskId);
     const task = tasks.get(assignment.taskId);
     if (!task) { issues.push("UNKNOWN_TASK"); continue; }
+    if (!Array.isArray(assignment.reasonCodes) || assignment.reasonCodes.length === 0 ||
+        assignment.reasonCodes.some(code => !nonemptyCode(code))) {
+      issues.push("MISSING_REASON_CODES");
+    }
     if (!validInterval(assignment)) { issues.push("INVALID_INTERVAL"); continue; }
     if (!Number.isSafeInteger(task.durationMinutes) || task.durationMinutes <= 0 ||
       assignment.endMs - assignment.startMs !== task.durationMinutes * 60000) {
@@ -67,10 +71,6 @@ export function inspectSchedulerProposal(input: QAInput, output: QAProposal): st
       } else if (overlaps(block, assignment)) {
         issues.push("LOCKED_BLOCK_CONFLICT");
       }
-    }
-    if (!Array.isArray(assignment.reasonCodes) || assignment.reasonCodes.length === 0 ||
-        assignment.reasonCodes.some(code => !nonemptyCode(code))) {
-      issues.push("MISSING_REASON_CODES");
     }
   }
   for (let i = 0; i < output.assignments.length; i++) {
