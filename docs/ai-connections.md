@@ -6,7 +6,7 @@ Apply `supabase/migrations/20261023000000_ai_integrations.sql` after all existin
 
 Open the same website and sign in with the same account on each device. Data is stored in Supabase, not a device-local task database. Add the website to your phone's home screen using its browser menu. An internet connection is required.
 
-Visible, idle pages check for updates every 30 seconds, and when focus/network connectivity returns (minimum 15 seconds between refreshes). Hidden tabs do not poll. Automatic refresh pauses while an input is focused or after a form is edited, to avoid overwriting drafts. After saving, navigate or reload to resume. This is eventual refresh, not continuous Realtime streaming. Existing web form saves do not use optimistic revision checks; simultaneous web edits still use last-save-wins. AI edits require a current revision.
+Visible, idle pages check for updates every 30 seconds, and when focus/network connectivity returns (minimum 15 seconds between refreshes). Hidden tabs do not poll. Automatic refresh pauses while an input is focused or after a form is edited, to avoid overwriting drafts. After saving, navigate or reload to resume. This is eventual refresh, not continuous Realtime streaming. Task edits in the current web workflow use exact updated_at revisions through mutate_schedule and reject stale concurrent writes. The integration API independently requires an exact expected_updated_at for edits. Refresh current data after a conflict; the periodic UI refresh is still eventual, not real-time synchronization.
 
 ## Create a key
 
@@ -28,13 +28,13 @@ Authorization: Bearer YOUR_ACCESS_KEY
 Content-Type: application/json
 ```
 
-Create body: `{"title":"Read chapter 2","scheduled_date":"2026-10-24","estimated_minutes":30}`. A date is optional; a time needs a date. Read `/profile` first and interpret schedule dates and wall times using that account timezone. Times are not UTC timestamps. Schedules are ordered by date (undated first) then id; paginate until an empty page. Projects return up to 100 per page, with offset pagination. Read projects to discover project ids. Existing skill ids can be read from schedules; there is no skill catalogue endpoint in v1.
+Create body: `{"title":"Read chapter 2","scheduled_date":"2026-10-24","estimated_minutes":30}`. A date is optional; a time needs a date. Read `/profile` first and interpret schedule dates and wall times using that account timezone. Times are not UTC timestamps. Schedules are ordered by date (undated first) then id; paginate until an empty page. Projects return up to 100 per page, with offset pagination. Read projects to discover project ids. The REST v1 routes currently have no skill catalogue endpoint; the stateless MCP tools/list interface exposes an owner-scoped list_skills tool. Read the exact available tool list instead of assuming REST/MCP parity.
 
 Before editing, GET the schedule and copy its **exact** `updated_at` string into `expected_updated_at`. Do not round fractional seconds. Example: `{"expected_updated_at":"COPY_FROM_GET","is_done":true}`. On HTTP 409 fetch again and reassess intent before retrying. Clear an optional field with JSON `null`. Clearing a date also requires clearing a previously assigned time. `trashed:true` moves a task to Trash; `trashed:false` restores it. There is no permanent delete, series expansion, recurring-series editing, or project mutation endpoint. Each update affects one occurrence. Creating is not idempotent: after an uncertain network outcome, check for an existing task before retrying.
 
 ## MCP
 
-Remote endpoint: `https://YOUR_DOMAIN/api/mcp`. Use a client supporting stateless Streamable HTTP POST, JSON responses, and a custom `Authorization: Bearer YOUR_ACCESS_KEY` header. Supported protocol versions: 2024-11-05, 2025-03-26, 2025-06-18. Initialize, then use tools/list and tools/call. Six tools match REST operations: list_schedules, get_schedule, list_projects, get_profile, create_schedule, update_schedule.
+Remote endpoint: `https://YOUR_DOMAIN/api/mcp`. Use a client supporting stateless Streamable HTTP POST, JSON responses, and a custom `Authorization: Bearer YOUR_ACCESS_KEY` header. Supported protocol versions: 2024-11-05, 2025-03-26, 2025-06-18. Initialize, then use tools/list and tools/call. Seven tools are advertised: list_schedules, get_schedule, list_projects, list_skills, get_profile, create_schedule, update_schedule. REST v1 currently exposes the other six, not list_skills.
 
 No OAuth server/discovery, dynamic client registration, legacy SSE transport, or server-side sessions are implemented. OAuth-only ChatGPT/Claude connectors cannot connect directly. Muse and other AI clients work only if their integration settings support this API or MCP authentication/transport; compatibility has not been tested against a live Muse account. An AI name alone does not establish support. For OAuth-only clients, a separate OAuth integration is a future step.
 
