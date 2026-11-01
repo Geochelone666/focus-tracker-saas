@@ -229,8 +229,8 @@ describe("active session persistence", () => {
   });
 
   it("abandons duplicate active sessions using their revisions and keeps the latest", async () => {
-    const latest = { id: "latest", started_at: now.toISOString() };
-    const oldest = { id: "oldest", started_at: "2026-09-25T12:00:00Z" };
+    const latest = { id: "latest", started_at: now.toISOString(), focus_revision: 0 };
+    const oldest = { id: "oldest", started_at: "2026-09-25T12:00:00Z", focus_revision: 0 };
     result = { data: [latest, stale, oldest], error: null };
     await cleanupDuplicateActiveSessions();
     expect(rpc.mock.calls).toEqual([
