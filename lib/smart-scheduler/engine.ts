@@ -162,14 +162,20 @@ export function scheduleTasks(input: SchedulerInput, mode: 'optimized' | 'baseli
     prevMap.set(previous.taskId,previous);
   }
   const preserved=new Map<string,Placement>();
-  const displaced=new Set<string>();
+  const displaced=new Map<string,ReasonCode>();
   if (mode === 'optimized') {
     // Reserve accepted placements first. Stable ordering avoids unrelated changes.
     for (const prepared of [...eligible].sort((a,b)=>a.task.id.localeCompare(b.task.id))) {
       const previous=prevMap.get(prepared.task.id);
       if (!previous) continue;
       if (!unchangedAccepted(previous,prepared,windows,busy,bufferMs,horizonEnd)) {
-        displaced.add(prepared.task.id);
+        let reason: ReasonCode = 'MOVED_INVALID_ACCEPTED';
+        try {
+          const old = toInterval(previous);
+          if (fixed.some(block => old.start < block.end && block.start < old.end+bufferMs))
+            reason = 'MOVED_FIXED_CONFLICT';
+        } catch { /* malformed accepted snapshot is not a fixed-event conflict */ }
+        displaced.set(prepared.task.id,reason);
         continue;
       }
       const start=instant(previous.startUtc);
@@ -195,7 +201,8 @@ export function scheduleTasks(input: SchedulerInput, mode: 'optimized' | 'baseli
       continue;
     }
     const codes: ReasonCode[]=[];
-    if (displaced.has(prepared.task.id)) codes.push('MOVED_FIXED_CONFLICT');
+    const displacedReason=displaced.get(prepared.task.id);
+    if (displacedReason) codes.push(displacedReason);
     if (prepared.task.priority==='high') codes.push('HIGH_PRIORITY');
     if (Number.isFinite(prepared.deadline) && prepared.deadline-now <= 2*24*60*MINUTE) codes.push('DEADLINE_SOON');
     if ((prepared.task.deferralCount ?? 0)>0) codes.push('DEFERRED_BEFORE');
