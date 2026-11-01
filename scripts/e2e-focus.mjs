@@ -2,7 +2,7 @@
 // No hosted Supabase, production credentials, or production data are used.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { chromium } from '@playwright/test';
@@ -242,6 +242,42 @@ try {
   await quick.getByLabel('Date (optional)',{exact:true}).fill(new Date(Date.parse(today)+7*86400000).toISOString().slice(0,10));
   await quick.getByRole('button',{name:'Add plan',exact:true}).click();
   await waitFor(async()=>serial(async()=>(await db.query("select count(*)::int as n from public.schedules where title='Next week adjustment'")).rows[0].n===1),'Future adjustment missing');
+  
+  // Fixture-only Smart Calendar preview: browser decisions cannot mutate schedules.
+  const beforePreview=await serial(async()=>(await db.query('select count(*)::int as n from public.schedules')).rows[0].n);
+  await a.setViewportSize({width:390,height:844});
+  await a.goto(base+'/calendar/smart-preview');
+  await a.getByRole('heading',{name:'Review a proposed day.'}).waitFor();
+  await a.getByRole('button',{name:'Keep original'}).first().click();
+  await a.getByRole('button',{name:'Accept suggestion'}).first().click();
+  await a.getByRole('button',{name:'Lock original'}).first().click();
+  await a.getByRole('button',{name:'Unlock block'}).first().click();
+  await a.getByRole('button',{name:'Conflicts',exact:true}).click();
+  await a.getByRole('button',{name:'All',exact:true}).click();
+  const physicsCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Physics problem set'} )});
+  await physicsCard.getByText('Adjust time manually').click();
+  await physicsCard.getByLabel('Manual start for Physics problem set').fill('16:00');
+  await physicsCard.getByLabel('Manual duration for Physics problem set').fill('60');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('button',{name:'Undo demo confirmation'}).waitFor();
+  await a.getByRole('button',{name:'Undo demo confirmation'}).click();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('submit');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('status').filter({hasText:'Simulated submit failure'}).waitFor();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('revision');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('status').filter({hasText:'Simulated stale revision'}).waitFor();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('network');
+  await a.getByRole('button',{name:'Reload example'}).click();
+  await a.getByRole('alert').filter({hasText:'Simulated network failure'}).waitFor();
+  await a.getByRole('button',{name:'Retry sample'}).click();
+  await a.getByRole('button',{name:'Reset decisions'}).click();
+  assert.equal(await serial(async()=>(await db.query('select count(*)::int as n from public.schedules')).rows[0].n),beforePreview,'Demo preview must not write tasks');
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Smart Calendar mobile overflow');
+  await mkdir('test-artifacts',{recursive:true});
+  await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-mobile.png',fullPage:true});
+  await a.setViewportSize({width:1280,height:900});
+  await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-desktop.png',fullPage:true});
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}
