@@ -12,17 +12,17 @@ function BlockEditor({task,tasks,date}:{task:Schedule;tasks:Schedule[];date:stri
  const dirty=useRef(false),handledSave=useRef<number|undefined>(undefined);
  useEffect(()=>{if(!dirty.current)setExpected(task.updated_at??'');},[task.updated_at]);
  useEffect(()=>{if(state.savedAt&&state.savedAt!==handledSave.current){handledSave.current=state.savedAt;dirty.current=false;setExpected(task.updated_at??'');}},[state.savedAt,task.updated_at]);
- return <form action={action} onInput={()=>{dirty.current=true;}} onChange={()=>{dirty.current=true;}} className="mt-3 grid gap-3 rounded border bg-white p-4 sm:grid-cols-2">
+ return <form action={action} onInput={()=>{dirty.current=true;}} onChange={()=>{dirty.current=true;}} className="mt-3 grid gap-3 rounded-sm border bg-white p-4 sm:grid-cols-2">
   <h3 className="font-semibold sm:col-span-2">Arrange: {task.title}</h3>
   <input type="hidden" name="id" value={task.id}/><input type="hidden" name="expected_updated_at" value={expected}/>
   <input type="hidden" name="series_revisions" value={JSON.stringify(Object.fromEntries(tasks.filter(item=>task.series_id && item.series_id===task.series_id).map(item=>[item.id,item.updated_at])))}/>
-  <label className="text-sm">Planned date<input name="date" type="date" defaultValue={task.scheduled_date??date} className="block w-full rounded border p-2"/></label>
-  <label className="text-sm">Start time<input name="time" type="time" defaultValue={task.scheduled_time?.slice(0,5)??'14:00'} className="block w-full rounded border p-2"/></label>
-  <label className="text-sm">Duration (minutes)<input name="minutes" type="number" min={1} max={1440} defaultValue={task.estimated_minutes??30} className="block w-full rounded border p-2"/></label>
-  {task.series_id&&<label className="text-sm">Edit scope<select name="scope" className="block w-full rounded border p-2"><option value="one">Only this occurrence</option><option value="future">This and future unfinished</option></select></label>}
+  <label className="text-sm">Planned date<input name="date" type="date" defaultValue={task.scheduled_date??date} className="block w-full rounded-sm border p-2"/></label>
+  <label className="text-sm">Start time<input name="time" type="time" defaultValue={task.scheduled_time?.slice(0,5)??'14:00'} className="block w-full rounded-sm border p-2"/></label>
+  <label className="text-sm">Duration (minutes)<input name="minutes" type="number" min={1} max={1440} defaultValue={task.estimated_minutes??30} className="block w-full rounded-sm border p-2"/></label>
+  {task.series_id&&<label className="text-sm">Edit scope<select name="scope" className="block w-full rounded-sm border p-2"><option value="one">Only this occurrence</option><option value="future">This and future unfinished</option></select></label>}
   <p className="text-xs sm:col-span-2">Deadline: {task.deadline??'None'}. Changing this block keeps the deadline. Clear both planned date and time to return to Inbox.</p>
   <SubmitButton label="Save time block"/>
-  {state.error&&<p role="alert" className="break-words text-red-800 sm:col-span-2">{state.error}</p>}{state.success&&<p role="status" className="sm:col-span-2">{state.success}</p>}
+  {state.error&&<p role="alert" className="wrap-break-word text-red-800 sm:col-span-2">{state.error}</p>}{state.success&&<p role="status" className="sm:col-span-2">{state.success}</p>}
  </form>;
 }
 export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:string;view:'day'|'week';zone:string}){
@@ -52,12 +52,12 @@ export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:
  function drag(event:React.DragEvent,id:string,kind='move'){event.dataTransfer.setData('application/x-focus-task',JSON.stringify({id,kind}));event.dataTransfer.effectAllowed='move';}
  return <section data-time-block-ready={ready?"true":"false"} aria-busy={!ready||pending} className="my-6 min-w-0" aria-label={`${view} time blocking`}>
   <p className="mb-3 text-sm">Times follow {zone}. Drag an Inbox task onto the timeline, move a block, or drag its Resize handle. The editor provides the same operations with keyboard or touch. Overlaps are allowed. DST dates show elapsed durations; repeated start times use the later occurrence, matching server reminders.</p>
-  <div className="mb-3 flex flex-wrap gap-2"><label className="text-sm">Arrange task<select aria-label="Arrange task" value={selected} onChange={e=>setSelected(e.target.value)} className="ml-2 max-w-full rounded border p-2"><option value="">Choose a task</option>{live.filter(task=>!task.is_done).map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
-   {inbox.map(task=><button key={task.id} draggable={ready} onDragStart={event=>drag(event,task.id)} onClick={()=>setSelected(task.id)} className="max-w-full break-words rounded border px-3 py-2 text-sm">Inbox: {task.title}</button>)}
+  <div className="mb-3 flex flex-wrap gap-2"><label className="text-sm">Arrange task<select aria-label="Arrange task" value={selected} onChange={e=>setSelected(e.target.value)} className="ml-2 max-w-full rounded-sm border p-2"><option value="">Choose a task</option>{live.filter(task=>!task.is_done).map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
+   {inbox.map(task=><button key={task.id} draggable={ready} onDragStart={event=>drag(event,task.id)} onClick={()=>setSelected(task.id)} className="max-w-full wrap-break-word rounded-sm border px-3 py-2 text-sm">Inbox: {task.title}</button>)}
   </div>
   {result.error&&<p role="alert" className="my-2 text-red-800">{result.error}</p>}{result.success&&<p role="status" className="my-2">{result.success}</p>}{pending&&<p role="status">Saving block…</p>}
   {chosen&&<BlockEditor key={chosen.id} task={chosen} tasks={tasks} date={date}/>}
-  <div className="mt-3 overflow-x-auto rounded border bg-white"><div style={{minWidth:view==='week'?1120:280}} className="flex">
+  <div className="mt-3 overflow-x-auto rounded-sm border bg-white"><div style={{minWidth:view==='week'?1120:280}} className="flex">
    <div className="w-12 shrink-0 pt-9" aria-hidden="true">{Array.from({length:24},(_,h)=><div key={h} className="h-12 text-xs text-slate-500">{String(h).padStart(2,'0')}:00</div>)}</div>
    {dates.map(day=>{
     const layout=dayBlockLayout(live,day,zone);
@@ -66,9 +66,9 @@ export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:
       {Array.from({length:24},(_,h)=><div key={h} className="pointer-events-none absolute w-full border-t border-slate-100" style={{top:h*48}}/>)}
       {layout.segments.map(({task,interval,top,height,lane,continued,carries})=>{
        const conflicts=conflictingTasks(task,live,zone),lanes=layout.lanes;
-       return <article key={task.id} draggable={ready&&!task.is_done} onDragStart={event=>drag(event,task.id)} className={`absolute overflow-hidden rounded border p-1 text-xs ${task.is_done?'border-slate-300 bg-slate-100':'border-blue-400 bg-blue-50'}`}
+       return <article key={task.id} draggable={ready&&!task.is_done} onDragStart={event=>drag(event,task.id)} className={`absolute overflow-hidden rounded-sm border p-1 text-xs ${task.is_done?'border-slate-300 bg-slate-100':'border-blue-400 bg-blue-50'}`}
         style={{top:top*.8,height:Math.max(32,height*.8),left:`${lane*100/lanes}%`,width:`${100/lanes}%`}}>
-        <button onClick={()=>setSelected(task.id)} className="w-full break-words text-left font-semibold underline">{task.title}</button>
+        <button onClick={()=>setSelected(task.id)} className="w-full wrap-break-word text-left font-semibold underline">{task.title}</button>
         <p>{continued ? "Continued · " : ""}{task.scheduled_time?.slice(0,5)}–{interval?timestampLabel(interval.end,zone):'?'} · {task.estimated_minutes??'?'}m{carries ? " · continues tomorrow" : ""}</p>
         {conflicts.length>0&&<p role="status" className="text-amber-900">Overlaps {conflicts.length} task(s)</p>}
         {interval?.ambiguous&&<p>Repeated time: standard occurrence</p>}

@@ -26,8 +26,8 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
           const completed = tasks.filter(item => item.is_done).length;
           const minutes=Math.floor((projectSeconds.get(project.id)??0)/60);
           return <article key={project.id} className="rounded-lg border bg-white p-5">
-            <h2 className="break-words text-xl font-semibold">{project.name}{project.is_done ? ' · Completed' : ''}</h2>
-            {project.description && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-600">{project.description}</p>}
+            <h2 className="wrap-break-word text-xl font-semibold">{project.name}{project.is_done ? ' · Completed' : ''}</h2>
+            {project.description && <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-slate-600">{project.description}</p>}
             <p className="my-3 text-sm text-slate-600">{completed}/{tasks.length} steps complete · {minutes}m focused{project.target_date ? ` · Target: ${project.target_date}` : ''}</p>
             <progress aria-label={`${project.name} progress`} value={completed} max={Math.max(1,tasks.length)} className="mb-3 w-full accent-slate-900" />
             <form action={toggleProject.bind(null,project.id,!project.is_done)}><SubmitButton label={project.is_done ? 'Reopen project' : 'Mark project complete'} /></form>

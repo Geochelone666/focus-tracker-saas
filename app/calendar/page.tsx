@@ -34,17 +34,17 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
     <main className="mx-auto max-w-5xl px-4 py-10 text-slate-900">
       <h1 className="text-3xl font-bold">Schedules & Calendar</h1>
       <p className="mt-2 mb-6 text-slate-600">Plan your day and check off your progress. Time and notes are optional.</p>
-      {typeof searchParams.error === 'string' && <p role="alert" className="mb-4 rounded bg-red-50 p-4 text-red-800">{searchParams.error}</p>}
+      {typeof searchParams.error === 'string' && <p role="alert" className="mb-4 rounded-sm bg-red-50 p-4 text-red-800">{searchParams.error}</p>}
       <nav aria-label="Calendar view" className="mb-4 flex gap-4">{(['day','week','month'] as const).map(item=><Link key={item} href={`?date=${selected}&view=${item}`} aria-current={view===item?'page':undefined} className="capitalize underline">{item}</Link>)}</nav>
       {totals&&<div className="my-4 grid gap-2 sm:grid-cols-3"><p>Planned: {totals.days.reduce((sum,day)=>sum+Number(day.planned_minutes??0),0)}m</p><p>Actual focus: {Math.floor(totals.days.reduce((sum,day)=>sum+Number(day.focus_seconds),0)/60)}m</p><p>Breaks: {Math.floor(totals.days.reduce((sum,day)=>sum+Number(day.break_seconds),0)/60)}m</p></div>}
       {view!=='month'&&<TimeBlockCalendar tasks={allSchedules} date={selected} view={view} zone={zone}/>}
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <section className="min-w-0 rounded-lg border bg-white p-3 sm:p-5" aria-label="Monthly calendar">
           <nav className="mb-5 flex items-center justify-between gap-2" aria-label="Change month">
-            <Link prefetch={false} href={dateHref(`${calendar.previous}-01`)} className="rounded border px-2 py-2" aria-label="Previous month">←</Link>
+            <Link prefetch={false} href={dateHref(`${calendar.previous}-01`)} className="rounded-sm border px-2 py-2" aria-label="Previous month">←</Link>
             <h2 className="font-semibold">{new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T00:00:00Z`))}</h2>
             <Link prefetch={false} href={dateHref(today)} className="text-sm underline">Today</Link>
-            <Link prefetch={false} href={dateHref(`${calendar.next}-01`)} className="rounded border px-2 py-2" aria-label="Next month">→</Link>
+            <Link prefetch={false} href={dateHref(`${calendar.next}-01`)} className="rounded-sm border px-2 py-2" aria-label="Next month">→</Link>
           </nav>
           <div className="grid grid-cols-7 text-center text-sm">
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => <div key={day} className="pb-3 text-slate-500">{day}</div>)}
@@ -53,7 +53,7 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
               const remaining = items.filter(item => !item.is_done).length;
               return <Link prefetch={false} key={date} href={dateHref(date)} aria-current={date === selected ? 'date' : undefined}
                 aria-label={`${date}: ${items.length} schedules, ${remaining} remaining`}
-                className={`flex min-h-20 flex-col items-center gap-1 border p-1 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 ${date === selected ? 'border-slate-900 bg-slate-100' : 'border-slate-100'} ${date.startsWith(month) ? '' : 'text-slate-400'}`}>
+                className={`flex min-h-20 flex-col items-center gap-1 border p-1 hover:bg-slate-100 focus-visible:outline-solid focus-visible:outline-2 ${date === selected ? 'border-slate-900 bg-slate-100' : 'border-slate-100'} ${date.startsWith(month) ? '' : 'text-slate-400'}`}>
                 <span className={date === today ? 'rounded-full bg-slate-900 px-2 text-white' : ''}>{Number(date.slice(-2))}</span>
                 {items.length > 0 && <span className="text-xs">{remaining ? `${remaining} open` : '✓ Done'}</span>}
               </Link>;

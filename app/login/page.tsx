@@ -21,7 +21,7 @@ export default async function LoginPage({ searchParams: searchParamsPromise }: L
         </p>
       ) : null}
 
-      <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
         <input type="hidden" name="next" value={typeof searchParams?.next==='string'?searchParams.next:''} />
         <div>
           <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
@@ -33,7 +33,7 @@ export default async function LoginPage({ searchParams: searchParamsPromise }: L
             type="email"
             required
             autoComplete="email"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-hidden"
             placeholder="you@example.com"
           />
         </div>
@@ -49,7 +49,7 @@ export default async function LoginPage({ searchParams: searchParamsPromise }: L
             required
             minLength={6}
             autoComplete="current-password"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-hidden"
             placeholder="••••••••"
           />
         </div>
