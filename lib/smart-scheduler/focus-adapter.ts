@@ -107,7 +107,7 @@ export function localDeadlineExclusiveUtc(day:string,zone:string):string {
   return new Date(localDayStart(addDays(day,1),zone)).toISOString();
 }
 function scheduledStart(row:FocusScheduleRow,zone:string):number {
-  if(!row.scheduled_date || !row.scheduled_time)bad('INVALID_SNAPSHOT','Missing dated start');
+  if(!row.scheduled_date || !row.scheduled_time) throw new SnapshotValidationError('INVALID_SNAPSHOT','Missing dated start');
   const instants=wallTimeInstants(row.scheduled_date,row.scheduled_time.slice(0,5),zone);
   if(!instants.length)bad('INVALID_SNAPSHOT','Nonexistent local scheduled time');
   return instants[instants.length-1]; // Existing app policy: later (standard) fold.
@@ -188,7 +188,7 @@ export function adaptFocusSnapshot(snapshot:SmartCalendarSnapshotV01):AdaptedSma
       bad('STALE_ACCEPTED_VERSION','Accepted placement does not match base version');
     const task=taskMap.get(item.schedule_id);
     if(!task || task.is_done || task.deleted_at || accepted.has(item.schedule_id))
-      bad('INVALID_SNAPSHOT','Accepted placement must belong to one active task');
+      throw new SnapshotValidationError('INVALID_SNAPSHOT','Accepted placement must belong to one active task');
     if(item.expected_updated_at!==task.updated_at)
       bad('STALE_ACCEPTED_VERSION','Accepted placement has stale task revision');
     accepted.set(item.schedule_id,item);
