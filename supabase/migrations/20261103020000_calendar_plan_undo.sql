@@ -85,6 +85,10 @@ begin
       jsonb_build_object('scheduled_date',prior->'scheduled_date',
                          'scheduled_time',prior->'scheduled_time',
                          'estimated_minutes',prior->'estimated_minutes'));
+    -- mutate_schedule counts date postponements. A reversed draft is not a
+    -- real deferral: restore the audited previous derived counter atomically.
+    update public.schedules set deferral_count=(prior->>'deferral_count')::integer
+      where id=(prior->>'id')::uuid and user_id=owner_id;
   end loop;
   -- Re-check hard deadlines and collisions involving restored tasks after
   -- writing; failed validation aborts the entire inverse transaction.
