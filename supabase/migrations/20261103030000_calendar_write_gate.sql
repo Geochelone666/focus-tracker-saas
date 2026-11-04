@@ -10,16 +10,21 @@ declare
   owner_id uuid;
 begin
   owner_id:=case when tg_op='DELETE' then old.user_id else new.user_id end;
-  if tg_table_name='schedules' and tg_op='UPDATE'
-    and (new.scheduled_date,new.scheduled_time,new.estimated_minutes,new.is_done,new.deleted_at)
-      is not distinct from
-      (old.scheduled_date,old.scheduled_time,old.estimated_minutes,old.is_done,old.deleted_at)
-    then return new;
-  end if;
-  if tg_table_name='focus_sessions' and tg_op='UPDATE'
-    and (new.focus_status,new.ended_at,new.schedule_id)
-      is not distinct from (old.focus_status,old.ended_at,old.schedule_id)
-    then return new;
+  -- PL/pgSQL can evaluate every operand of AND; never access fields
+  -- from another trigger table's NEW/OLD record in one combined IF.
+  if tg_table_name='schedules' then
+    if tg_op='UPDATE' then
+      if (new.scheduled_date,new.scheduled_time,new.estimated_minutes,new.is_done,new.deleted_at)
+           is not distinct from
+         (old.scheduled_date,old.scheduled_time,old.estimated_minutes,old.is_done,old.deleted_at)
+      then return new; end if;
+    end if;
+  elsif tg_table_name='focus_sessions' then
+    if tg_op='UPDATE' then
+      if (new.focus_status,new.ended_at,new.schedule_id)
+           is not distinct from (old.focus_status,old.ended_at,old.schedule_id)
+      then return new; end if;
+    end if;
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner_id::text,1029));
   if tg_op='DELETE' then return old; end if;
