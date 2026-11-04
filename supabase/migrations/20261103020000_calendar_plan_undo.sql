@@ -88,9 +88,11 @@ begin
                          'estimated_minutes',prior->'estimated_minutes'));
     -- mutate_schedule counts date postponements. A reversed draft is not a
     -- real deferral: restore the audited previous derived counter atomically.
+    perform pg_catalog.set_config('focus_calendar.undo_restore','on',true);
     update public.schedules set deferral_count=(prior->>'deferral_count')::integer
       where id=(prior->>'id')::uuid and user_id=owner_id;
     get diagnostics counter_updates = row_count;
+    perform pg_catalog.set_config('focus_calendar.undo_restore','off',true);
     if counter_updates <> 1 then
       raise exception 'Undo counter UPDATE affected % rows, target %, owner %',
         counter_updates,(prior->>'id')::uuid,owner_id;
