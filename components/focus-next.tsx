@@ -1,10 +1,13 @@
 'use client';
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { nextFocusPhase, saveCompletedFocusOutcome } from '@/app/dashboard/focus-actions';
 import type { FocusSession } from '@/lib/focus-state';
 export function FocusNext({ session,skills=[] }: { session: FocusSession; skills?:{id:string;name:string}[] }) {
+  const router = useRouter();
   const [result, action, pending] = useActionState(nextFocusPhase,{});
   const [outcomeResult,saveOutcome,savingOutcome]=useActionState(saveCompletedFocusOutcome,{});
+  useEffect(() => { if (result.saved || outcomeResult.saved) router.refresh(); }, [result.saved, outcomeResult.saved, router]);
   if (session.focus_status !== 'completed') return null;
   const focus = !session.session_kind || session.session_kind === 'focus';
   const done = !focus && (session.cycle_number ?? 1) >= (session.cycle_count ?? 1);

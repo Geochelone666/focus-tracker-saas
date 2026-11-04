@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useActionState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createPlan, editPlan } from '@/app/planning/actions';
 import type { Choice, Schedule } from '@/lib/planning';
 import { SubmitButton } from './submit-button';
 
 export const fieldClass = 'mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900';
 export function PlanForm({ plan, date = '', projects = [], skills = [], projectId = '', returnTo = '/today', series = [] }: { series?: Schedule[]; plan?: Schedule; date?: string; projects?: Choice[]; skills?: Choice[]; projectId?: string; returnTo?: string }) {
+  const router = useRouter();
   const [state, action] = useActionState(plan ? editPlan.bind(null, plan.id) : createPlan, {});
+  const [awaitingRefresh,setAwaitingRefresh]=useState(false);
   const initial: Record<string,string> = {
     title: plan?.title ?? '', scheduled_date: plan?.scheduled_date ?? date,
     scheduled_time: plan?.scheduled_time?.slice(0,5) ?? '',
@@ -23,12 +26,15 @@ export function PlanForm({ plan, date = '', projects = [], skills = [], projectI
   const revision=plan?.updated_at??'';
   const seriesKey=JSON.stringify(Object.fromEntries(series.filter(item=>plan?.series_id&&item.series_id===plan.series_id).map(item=>[item.id,item.updated_at])));
   const [baseline,setBaseline]=useState({revision,seriesKey});
-  useEffect(()=>{if(!dirty.current){setDraft(JSON.parse(initialKey));setBaseline({revision,seriesKey});}},[initialKey,revision,seriesKey]);
+  useEffect(()=>{if(!dirty.current&&!awaitingRefresh){setDraft(JSON.parse(initialKey));setBaseline({revision,seriesKey});}},[initialKey,revision,seriesKey,awaitingRefresh]);
+  useEffect(()=>{if(awaitingRefresh&&revision!==baseline.revision){setDraft(JSON.parse(initialKey));setBaseline({revision,seriesKey});setAwaitingRefresh(false);}},[awaitingRefresh,revision,baseline.revision,seriesKey,initialKey]);
   useEffect(() => {
-    if(state.savedAt&&state.savedAt!==handledSave.current){handledSave.current=state.savedAt;dirty.current=false;setBaseline({revision,seriesKey});setDraft(JSON.parse(initialKey));}
-  }, [state.savedAt, initialKey,revision,seriesKey]);
+    if(state.savedAt&&state.savedAt!==handledSave.current){handledSave.current=state.savedAt;dirty.current=false;if(plan){setAwaitingRefresh(true);router.refresh();}else{setBaseline({revision,seriesKey});setDraft(JSON.parse(initialKey));}}
+  }, [state.savedAt, initialKey,revision,seriesKey,plan,router]);
   const bind = (name: string) => ({ value: draft[name] ?? '', onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { const value = event.target.value; dirty.current=true; setDraft(current => ({ ...current, [name]: value })); } });
   return <form action={action} className="space-y-3">
+    {awaitingRefresh&&<p role="status" className="text-sm">Saved. Syncing the latest task revision…</p>}
+    <fieldset disabled={awaitingRefresh} className="space-y-3">
     <input type="hidden" name="expected_updated_at" value={baseline.revision} />
     <input type="hidden" name="series_revisions" value={baseline.seriesKey} />
     <input type="hidden" name="return_to" value={returnTo} />
@@ -61,5 +67,6 @@ export function PlanForm({ plan, date = '', projects = [], skills = [], projectI
       </div>
     </details>
     <SubmitButton label={plan ? 'Save changes' : 'Add plan'} />
+    </fieldset>
   </form>;
 }
