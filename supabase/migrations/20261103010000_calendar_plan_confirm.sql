@@ -156,7 +156,8 @@ begin
   end loop;
   select coalesce(jsonb_agg(jsonb_build_object(
     'id',s.id,'updated_at',s.updated_at,'scheduled_date',s.scheduled_date,
-    'scheduled_time',s.scheduled_time,'estimated_minutes',s.estimated_minutes)
+    'scheduled_time',s.scheduled_time,'estimated_minutes',s.estimated_minutes,
+    'deferral_count',s.deferral_count)
     order by s.id),'[]'::jsonb) into before_rows
     from public.schedules s
     where s.user_id=owner_id and s.id in
@@ -186,7 +187,8 @@ begin
   end if;
   select coalesce(jsonb_agg(jsonb_build_object(
     'id',s.id,'updated_at',s.updated_at,'scheduled_date',s.scheduled_date,
-    'scheduled_time',s.scheduled_time,'estimated_minutes',s.estimated_minutes)
+    'scheduled_time',s.scheduled_time,'estimated_minutes',s.estimated_minutes,
+    'deferral_count',s.deferral_count)
     order by s.id),'[]'::jsonb) into after_rows
     from public.schedules s
     where s.user_id=owner_id and s.id in
