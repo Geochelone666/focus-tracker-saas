@@ -18,8 +18,8 @@ begin
     raise exception 'Authentication and IDs required' using errcode='42501';
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner_id::text,1029));
-  select revision into revision from public.calendar_plan_state
-    where user_id=owner_id for update;
+  select ps.revision into revision from public.calendar_plan_state ps
+    where ps.user_id=owner_id for update;
   select * into receipt from public.calendar_plan_receipts
     where id=p_receipt and user_id=owner_id for update;
   if not found then raise exception 'Receipt unavailable' using errcode='42501'; end if;
