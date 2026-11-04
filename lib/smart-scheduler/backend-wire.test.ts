@@ -8,7 +8,7 @@ const snapshot=()=>structuredClone(fixture.snapshot) as SmartCalendarSnapshotV01
 const valid=(start:string,end:string)=>({
   schedule_id:'00000000-0000-4000-8000-000000000009',
   expected_updated_at:'2026-11-01T02:03:09.123456Z',start_at:start,end_at:end,
-  reason_codes:['EARLIEST_FEASIBLE'] as const,locked:false as const,
+  reason_codes:['EARLIEST_FEASIBLE' as const],locked:false as const,
   estimate_source:'user' as const,
 });
 describe('F2-A03 vetted legacy backend RPC encoding (no database writes)',()=>{
