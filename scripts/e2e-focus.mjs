@@ -196,7 +196,14 @@ try {
   await a.reload();await a.setViewportSize({width:390,height:844});
   await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
   const mobileEditor=a.getByRole('heading',{name:'Arrange: Calendar captured task'}).locator('..');
-  await mobileEditor.getByLabel('Duration (minutes)').fill('60');await mobileEditor.getByRole('button',{name:'Save time block'}).click();
+  // Keyboard-only mobile edit: focus, select-all, type and activate via Enter.
+  const durationControl=mobileEditor.getByLabel('Duration (minutes)');
+  await durationControl.focus();
+  await a.keyboard.press('ControlOrMeta+A');
+  await a.keyboard.type('60');
+  const saveWithKeyboard=mobileEditor.getByRole('button',{name:'Save time block'});
+  await saveWithKeyboard.focus();
+  await a.keyboard.press('Enter');
   await waitFor(async()=>(await calendarTask()).estimated_minutes===60,'Mobile edit did not persist');
   assert.equal((await calendarTask()).deadline,'2026-12-31');
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile calendar overflow');
