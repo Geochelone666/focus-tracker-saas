@@ -13,6 +13,7 @@ declare
   after_stamp timestamptz;
   snapshot_count integer;
   next_revision bigint;
+  counter_updates integer;
 begin
   if owner_id is null or p_receipt is null or p_request is null then
     raise exception 'Authentication and IDs required' using errcode='42501';
@@ -89,6 +90,11 @@ begin
     -- real deferral: restore the audited previous derived counter atomically.
     update public.schedules set deferral_count=(prior->>'deferral_count')::integer
       where id=(prior->>'id')::uuid and user_id=owner_id;
+    get diagnostics counter_updates = row_count;
+    if counter_updates <> 1 then
+      raise exception 'Undo counter UPDATE affected % rows, target %, owner %',
+        counter_updates,(prior->>'id')::uuid,owner_id;
+    end if;
     if (select deferral_count from public.schedules
         where id=(prior->>'id')::uuid and user_id=owner_id)
        is distinct from (prior->>'deferral_count')::integer then
