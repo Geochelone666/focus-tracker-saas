@@ -79,7 +79,10 @@ begin
   perform public.undo_calendar_plan(receipt_id,'f3666666-6666-4666-8666-666666666666');
   if (select deferral_count from public.schedules
       where id='f3011111-1111-4111-8111-111111111111')<>0 then
-    raise exception 'Undo failed to restore deferral counter';
+    raise exception 'Undo failed to restore deferral counter: actual %, before %, after %',
+      (select deferral_count from public.schedules where id='f3011111-1111-4111-8111-111111111111'),
+      (select before_rows from public.calendar_plan_receipts where id=receipt_id),
+      (select after_rows from public.calendar_plan_receipts where id=receipt_id);
   end if;
   -- Existing wall-time storage supports only the later/standard DST fold.
   -- The earlier UTC fold must be rejected rather than silently moved an hour.
