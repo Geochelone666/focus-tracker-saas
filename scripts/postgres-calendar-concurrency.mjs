@@ -91,3 +91,11 @@ const positions=sql("select id::text||'='||to_char(scheduled_time,'HH24:MI') fro
 assert.match(positions,/=08:00/,'Selected task must remain unchanged after rejection');
 assert.match(positions,/=09:30/,'Unselected direct update must commit');
 console.log('PostgreSQL two-connection TOCTOU: wait observed; conflict rejected; atomic rollback preserved');
+
+const beforeRollback=sql("select coalesce(jsonb_agg(jsonb_build_object('id',id,'user_id',user_id,'scheduled_time',scheduled_time) order by id),'[]'::jsonb)::text from public.schedules;");
+sqlFile(resolve('supabase/tests/calendar_plan_rollback.sql'));
+const afterRollback=sql("select coalesce(jsonb_agg(jsonb_build_object('id',id,'user_id',user_id,'scheduled_time',scheduled_time) order by id),'[]'::jsonb)::text from public.schedules;");
+assert.equal(afterRollback,beforeRollback,'Rollback must preserve all existing task rows');
+assert.equal(sql("select count(*) from pg_proc where oid=to_regprocedure('public.confirm_calendar_draft(uuid,uuid)');"),'0');
+assert.equal(sql("select count(*) from pg_proc where oid=to_regprocedure('public.apply_schedule_batch(jsonb)');"),'1');
+console.log('PostgreSQL rollback: F2-B03 objects removed, F2-B02 RPC and task data preserved');
