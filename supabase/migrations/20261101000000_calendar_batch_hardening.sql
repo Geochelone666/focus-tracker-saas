@@ -72,12 +72,17 @@ begin
     raise exception 'Duplicate task in batch' using errcode = '22023';
   end if;
 
-  -- Serialize this RPC for one owner, then acquire row locks in UUID order.
-  -- Other legacy direct task writes are NOT subject to this advisory lock.
+  -- The advisory lock serializes batch writers only. Lock the profile and
+  -- every existing open owner block (not merely the selected tasks): a direct
+  -- UPDATE of an untouched block must finish before collision revalidation.
+  -- Keep selected completed/trashed rows locked so they fail deterministically.
+  -- This protects existing rows, NOT phantoms from concurrent INSERTs or edits
+  -- made after our commit. Direct legacy writes remain a release blocker.
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner_id::text, 1029));
   select z.name into zone
     from public.profiles p join pg_catalog.pg_timezone_names z on z.name = p.timezone
-    where p.user_id = owner_id;
+    where p.user_id = owner_id
+    for share of p;
   if zone is null then
     raise exception 'Set a valid account timezone before scheduling' using errcode = '22023';
   end if;
@@ -85,11 +90,15 @@ begin
   for task in
     select s.* from public.schedules s
     where s.user_id = owner_id
-      and s.id in (select (x.value->>'id')::uuid
-                   from jsonb_array_elements(p_changes) as x(value))
+      and ((not s.is_done and s.deleted_at is null)
+           or s.id in (select (x.value->>'id')::uuid
+                       from jsonb_array_elements(p_changes) as x(value)))
     order by s.id for update
   loop
-    locked_count := locked_count + 1;
+    if task.id in (select (x.value->>'id')::uuid
+                   from jsonb_array_elements(p_changes) as x(value)) then
+      locked_count := locked_count + 1;
+    end if;
   end loop;
   if locked_count <> total then
     raise exception 'Task unavailable' using errcode = '42501';
@@ -108,6 +117,15 @@ begin
     end if;
     requested_date := (item->>'scheduled_date')::date;
     requested_time := (item->>'scheduled_time')::time;
+    requested_minutes := (item->>'estimated_minutes')::integer;
+    -- A date-only deadline includes the entire account-local due date.
+    -- Compare elapsed UTC instants; do not assume every local day is 24h.
+    if task.deadline is not null
+       and ((requested_date + requested_time) at time zone zone)
+           + requested_minutes * interval '1 minute'
+           > public.local_day_start(task.deadline + 1, zone) then
+      raise exception 'Placement exceeds task deadline' using errcode = '22023';
+    end if;
     if (((requested_date + requested_time) at time zone zone) at time zone zone)
          <> requested_date + requested_time then
       raise exception 'Nonexistent local time' using errcode = '22023';
