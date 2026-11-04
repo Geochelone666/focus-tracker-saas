@@ -118,7 +118,7 @@ function crop(block:UtcInterval,window:UtcInterval):UtcInterval|null {
   return end>start ? {startUtc:new Date(start).toISOString(),endUtc:new Date(end).toISOString()}:null;
 }
 const ordered=<T,>(rows:T[],key:(item:T)=>string)=>[...rows].sort((a,b)=>key(a).localeCompare(key(b)));
-function historySamples(rows:FocusScheduleRow[],sessions:FocusCompletedSessionRow[],owner:string):DurationSample[] {
+function historySamples(rows:FocusScheduleRow[],sessions:FocusCompletedSessionRow[],owner:string,asOf:number):DurationSample[] {
   const tasks=new Map(rows.map(row=>[row.id,row]));
   const ids=new Set<string>();
   const totals=new Map<string,{seconds:number;lastEnd:number}>();
@@ -131,7 +131,9 @@ function historySamples(rows:FocusScheduleRow[],sessions:FocusCompletedSessionRo
        ||session.duration_sec! > 86400)continue;
     const task=tasks.get(session.schedule_id);
     if(!task || !task.is_done || task.deleted_at)continue;
-    const ended=timestamp(session.ended_at);
+    let ended:number;
+    try { ended=timestamp(session.ended_at); } catch { continue; }
+    if(ended>asOf)continue; // No future observations or look-ahead leakage.
     const value=totals.get(task.id)??{seconds:0,lastEnd:0};
     value.seconds+=session.duration_sec!;
     value.lastEnd=Math.max(value.lastEnd,ended);
@@ -173,7 +175,7 @@ export function adaptFocusSnapshot(snapshot:SmartCalendarSnapshotV01):AdaptedSma
     timestamp(row.updated_at);
     taskMap.set(row.id,row);
   }
-  const sampleList=historySamples(taskRows,snapshot.focus_sessions,owner);
+  const sampleList=historySamples(taskRows,snapshot.focus_sessions,owner,timestamp(now));
   const fixedBlocks:FixedBlock[]=[];
   for(const busy of ordered(snapshot.busy_intervals,x=>x.source_id)) {
     const block=within(busy,owner);
@@ -201,8 +203,8 @@ export function adaptFocusSnapshot(snapshot:SmartCalendarSnapshotV01):AdaptedSma
     if(row.scheduled_time && !row.scheduled_date)
       bad('INVALID_SNAPSHOT','Timed task has no date');
     if(row.scheduled_date && row.scheduled_time) {
-      if(!Number.isInteger(row.estimated_minutes)||row.estimated_minutes!<1||
-         row.estimated_minutes!>1440)
+      if(!accepted.has(row.id) && (!Number.isInteger(row.estimated_minutes)||row.estimated_minutes!<1||
+         row.estimated_minutes!>1440))
         bad('UNBOUNDED_FIXED_EVENT','Timed task needs explicit duration to prove no overlap');
       const start=scheduledStart(row,zone);
       const interval={startUtc:new Date(start).toISOString(),
