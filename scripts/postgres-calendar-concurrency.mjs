@@ -92,6 +92,29 @@ assert.match(positions,/=08:00/,'Selected task must remain unchanged after rejec
 assert.match(positions,/=09:30/,'Unselected direct update must commit');
 console.log('PostgreSQL two-connection TOCTOU: wait observed; conflict rejected; atomic rollback preserved');
 
+// A conflict is NOT a silently successful retry: re-read the task, choose
+// a new valid slot, and submit a fresh intentional change.
+const freshStamp=sql("select to_char(updated_at at time zone 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') from public.schedules where id='"+selected+"';");
+const freshPayload="jsonb_build_array(jsonb_build_object('id','"+selected+
+  "','expected_updated_at','"+freshStamp+
+  "','scheduled_date','2027-06-15','scheduled_time','10:45','estimated_minutes',60))";
+sql('begin;\nset local role authenticated;\n'+
+  "select set_config('request.jwt.claim.sub','"+owner+"',true);\n"+
+  'select public.apply_schedule_batch('+freshPayload+');\ncommit;\n');
+assert.equal(sql("select to_char(scheduled_time,'HH24:MI') from public.schedules where id='"+selected+"';"),
+  '10:45','An explicit fresh retry should commit after the conflict is resolved');
+let staleRejected=false;
+try {
+  sql('begin;\nset local role authenticated;\n'+
+    "select set_config('request.jwt.claim.sub','"+owner+"',true);\n"+
+    'select public.apply_schedule_batch('+freshPayload+');\nrollback;\n');
+} catch(error) {
+  staleRejected=/40001|Task changed; reload plan/.test(String(error));
+}
+assert.equal(staleRejected,true,'Identical stale revision must be rejected after the successful retry');
+console.log('PostgreSQL bounded retry: fresh intent accepted, stale replay rejected');
+
+
 const beforeRollback=sql("select coalesce(jsonb_agg(jsonb_build_object('id',id,'user_id',user_id,'scheduled_time',scheduled_time) order by id),'[]'::jsonb)::text from public.schedules;");
 sqlFile(resolve('supabase/rollback/calendar_plan_rollback.sql'));
 const afterRollback=sql("select coalesce(jsonb_agg(jsonb_build_object('id',id,'user_id',user_id,'scheduled_time',scheduled_time) order by id),'[]'::jsonb)::text from public.schedules;");
