@@ -106,7 +106,7 @@ inverse edit. Repeating an identical undo request returns its prior receipt.
   lock wait, stale untouched-row conflict, complete rollback.
 - .github/workflows/ci.yml: independent postgres-calendar job using
   a temporary Docker service, no hosted Supabase keys.
-- supabase/tests/calendar_plan_rollback.sql: disposable rollback of
+- supabase/rollback/calendar_plan_rollback.sql: disposable rollback of
   F2-B03-only objects. Integration asserts tasks survive and the F2-B02
   batch RPC remains. Production ledger deletion would lose receipt history:
   backup, retention and separate authorization required.
@@ -115,3 +115,17 @@ Required gate: real PostgreSQL CI + PGlite unit suite both successful,
 independent QA and architecture review, frozen algorithm/UI mapping,
 hosted migration drift clearance and separate deploy authorization.
 A PR or a green CI check alone is NOT production acceptance.
+
+## Derived progress restoration (F2-B03)
+
+The existing `schedule_progress` BEFORE UPDATE trigger recomputes
+`deferral_count` and would otherwise overwrite the inverse CAS snapshot.
+F2-B03 keeps ordinary trigger behavior and allows restoring the previous
+counter only while the transaction is running as the database's trusted
+`postgres` function owner **and** the transaction-local
+`focus_calendar.undo_restore` flag is enabled inside `undo_calendar_plan`.
+A client setting the same flag while authenticated is explicitly tested to
+have no effect. The undo entrypoint sets the flag for just the counter UPDATE
+and turns it off immediately. Normal metadata edits remain subject to the
+existing progress trigger. The disposable rollback also restores the original
+trigger function, and is intentionally outside the automatic SQL test directory.
