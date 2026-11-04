@@ -120,7 +120,7 @@ describe('F2-A03 Focus-owned data adapter + actual independent QA #72 oracle',()
   expect(block?.startUtc).toBe('2026-11-01T06:30:00.000Z');
  });
  it('21 returns explained unplaced tasks when all availability is blocked',()=>{
-  const s=snapshot();s.accepted_blocks=[];s.base_version_id=null;
+  const s=snapshot();
   s.busy_intervals.push({user_id:s.user_id,source_id:'all',kind:'locked',
     start_at:'2026-11-02T14:00:00Z',end_at:'2026-11-02T20:00:00Z'});
   const {raw,adapted}=previewSmartCalendar(s);
