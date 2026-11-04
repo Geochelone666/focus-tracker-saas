@@ -89,6 +89,14 @@ begin
     -- real deferral: restore the audited previous derived counter atomically.
     update public.schedules set deferral_count=(prior->>'deferral_count')::integer
       where id=(prior->>'id')::uuid and user_id=owner_id;
+    if (select deferral_count from public.schedules
+        where id=(prior->>'id')::uuid and user_id=owner_id)
+       is distinct from (prior->>'deferral_count')::integer then
+      raise exception 'Undo counter restoration failed: expected %, actual %, owner %',
+        (prior->>'deferral_count')::integer,
+        (select deferral_count from public.schedules
+         where id=(prior->>'id')::uuid and user_id=owner_id),owner_id;
+    end if;
   end loop;
   -- Re-check hard deadlines and collisions involving restored tasks after
   -- writing; failed validation aborts the entire inverse transaction.
