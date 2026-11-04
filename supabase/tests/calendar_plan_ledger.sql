@@ -81,6 +81,35 @@ begin
       where id='f3011111-1111-4111-8111-111111111111')<>0 then
     raise exception 'Undo failed to restore deferral counter';
   end if;
+  -- Existing wall-time storage supports only the later/standard DST fold.
+  -- The earlier UTC fold must be rejected rather than silently moved an hour.
+  select updated_at into stamp from public.schedules
+    where id='f3011111-1111-4111-8111-111111111111';
+  draft_id:=public.stage_calendar_draft(
+    jsonb_build_array(jsonb_build_object('id','f3011111-1111-4111-8111-111111111111',
+      'expected_updated_at',stamp,'start_at','2027-11-07T05:30:00Z',
+      'end_at','2027-11-07T06:00:00Z')),
+    '[{"start_at":"2027-11-07T04:00:00Z","end_at":"2027-11-07T08:00:00Z"}]',4);
+  begin
+    perform public.confirm_calendar_draft(draft_id,'f3777777-7777-4777-8777-777777777777');
+    raise exception 'Earlier DST fold was silently accepted';
+  exception when invalid_parameter_value then null; end;
+  if (select revision from public.calendar_plan_state
+      where user_id=current_setting('test.owner')::uuid)<>4 then
+    raise exception 'Rejected fold modified plan revision';
+  end if;
+  draft_id:=public.stage_calendar_draft(
+    jsonb_build_array(jsonb_build_object('id','f3011111-1111-4111-8111-111111111111',
+      'expected_updated_at',stamp,'start_at','2027-11-07T06:30:00Z',
+      'end_at','2027-11-07T07:00:00Z')),
+    '[{"start_at":"2027-11-07T04:00:00Z","end_at":"2027-11-07T08:00:00Z"}]',4);
+  confirm_result:=public.confirm_calendar_draft(draft_id,'f3888888-8888-4888-8888-888888888888');
+  receipt_id:=(confirm_result->>'receipt_id')::uuid;
+  if (select scheduled_time from public.schedules
+      where id='f3011111-1111-4111-8111-111111111111')<>time '01:30' then
+    raise exception 'Later DST fold lost local wall time';
+  end if;
+  perform public.undo_calendar_plan(receipt_id,'f3999999-9999-4999-8999-999999999999');
   -- Stale plan revision cannot stage another confirmed plan against version zero.
   begin
     perform public.stage_calendar_draft(
