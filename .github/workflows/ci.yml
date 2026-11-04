@@ -108,3 +108,39 @@ jobs:
       - run: npm run typecheck
       - run: npm run check
       - run: npm run export:check
+
+  # A disposable, real PostgreSQL service: distinct server connections.
+  # No hosted Supabase project, production keys or database migrations touched.
+  postgres-calendar:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: focus_calendar_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d focus_calendar_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGDATABASE: focus_calendar_ci
+      PGPASSWORD: test-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+      - name: Real two-connection calendar commit regression
+        run: node scripts/postgres-calendar-concurrency.mjs
