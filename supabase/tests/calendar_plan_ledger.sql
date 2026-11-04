@@ -113,6 +113,16 @@ begin
     raise exception 'Later DST fold lost local wall time';
   end if;
   perform public.undo_calendar_plan(receipt_id,'f3999999-9999-4999-8999-999999999999');
+  -- A regular authenticated caller must never be able to forge the
+  -- privileged undo-only trigger flag to override derived progress.
+  perform set_config('focus_calendar.undo_restore','on',true);
+  update public.schedules set deferral_count=999
+    where id='f3011111-1111-4111-8111-111111111111';
+  if (select deferral_count from public.schedules
+      where id='f3011111-1111-4111-8111-111111111111')<>0 then
+    raise exception 'Authenticated client forged undo progress restoration';
+  end if;
+  perform set_config('focus_calendar.undo_restore','off',true);
   -- Stale plan revision cannot stage another confirmed plan against version zero.
   begin
     perform public.stage_calendar_draft(
