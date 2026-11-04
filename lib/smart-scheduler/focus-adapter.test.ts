@@ -182,6 +182,22 @@ describe('F2-A03 Focus-owned data adapter + actual independent QA #72 oracle',()
   expect(restored.output.placements.find(p=>p.schedule_id===id(3))?.start_at).toBe(accepted.start_at);
   expect(verifyActualScheduler(restored.adapted.engineInput,[id(3)]).frozenIssues).toEqual([]);
  });
+ it('35 accepted user-locked scheduler block becomes immutable and is not re-optimized',()=>{
+  const s=snapshot();s.accepted_blocks[0].is_locked=true;
+  const {adapted,raw}=previewSmartCalendar(s);
+  expect(adapted.engineInput.tasks.map(t=>t.id)).not.toContain(id(3));
+  expect(adapted.engineInput.fixedBlocks).toEqual(expect.arrayContaining([
+    expect.objectContaining({id:'accepted-lock:'+id(3),kind:'locked',
+      startUtc:'2026-11-02T18:00:00.000Z',endUtc:'2026-11-02T18:30:00.000Z'}),
+  ]));
+  expect(raw.placements.some(p=>p.taskId===id(3))).toBe(false);
+  expect(inspectActualScheduler(adapted.engineInput,raw)).toEqual([]);
+ });
+ it('36 excludes future-dated focus sessions from the estimate dataset',()=>{
+  const s=snapshot();s.schedules.push(extra(s,5,{is_done:true,estimated_minutes:40}));
+  s.focus_sessions.push({...session(s,1,id(5)),ended_at:'2026-11-10T12:00:00Z'});
+  expect(adaptFocusSnapshot(s).historicalSampleCount).toBe(0);
+ });
  it('29 two distinct task revisions never silently collapse into same preview fingerprint',()=>{
   const s=snapshot(),a=adaptFocusSnapshot(s).inputFingerprint;
   s.schedules[0].updated_at='2026-11-01T02:03:01.123457Z';
