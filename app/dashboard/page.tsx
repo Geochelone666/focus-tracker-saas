@@ -88,7 +88,6 @@ export default async function DashboardPage({
 
   const { data: projects } = await supabase.from('projects').select('id,name').eq('user_id',user.id).order('name');
   const { data: taskChoices } = await supabase.from('schedules').select('id,title').eq('user_id',user.id).eq('is_done',false).is('deleted_at',null).order('id').limit(100);
-  const weeklyTotalSeconds=weeklyReport.days.reduce((sum,day)=>sum+Number(day.focus_seconds),0);
   const dailyFocus=weeklyReport.days.map(day=>({key:day.day,label:day.day,minutes:Math.floor(Number(day.focus_seconds)/60)}));
   const maximumDailyMinutes = Math.max(...dailyFocus.map((day) => day.minutes));
 

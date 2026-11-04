@@ -27,3 +27,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Disposable browser regression screenshots (uploaded by CI)
+/test-artifacts/
