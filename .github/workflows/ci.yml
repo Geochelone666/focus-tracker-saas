@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
@@ -20,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Cache Next.js build cache
@@ -34,8 +37,17 @@ jobs:
       - name: Set npm registry
         run: npm config set registry https://registry.npmjs.org/
 
+      - name: Validate local migration filenames (offline only)
+        run: node scripts/migration-drift-preflight.mjs --local-only --format json
+
+      - name: Test migration preflight (offline fixtures)
+        run: node --test scripts/migration-drift-preflight.node-tests.mjs
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Check installed web dependency tree
+        run: npm ls --depth=0
 
       - name: Lint
         run: npm run lint
@@ -63,7 +75,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
