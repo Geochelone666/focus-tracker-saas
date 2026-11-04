@@ -47,6 +47,20 @@ describe('F2-A03: owner-scoped, leakage-free offline duration evaluation',()=>{
     evaluated:0,filtered:1,meanAbsoluteErrorMinutes:null,baselineMAEMinutes:null,
   });
  });
+ it('10 prints reproducible leakage-free synthetic holdout error versus prior baseline',()=>{
+  const data=Array.from({length:30},(_,i)=>record(i,{
+    completedAtUtc:new Date(Date.UTC(2026,9,2+i,12)).toISOString(),
+    actualMinutes:i%2===0?55:65,estimatedMinutes:null,
+  }));
+  const result=evaluateDurationEstimates(owner,data);
+  expect(result.evaluated).toBe(30);
+  expect(result.filtered).toBe(0);
+  expect(result.historySupportedPredictions).toBeGreaterThan(20);
+  expect(result.meanAbsoluteErrorMinutes!).toBeLessThan(result.baselineMAEMinutes!);
+  console.log('F2_A03_ESTIMATION_EVAL='+JSON.stringify({
+    fixture:'30 chronological completed tasks (synthetic, no production data)',...result,
+  }));
+ });
  it('09 can evaluate 12 synthetic observations without using AI or remote services',()=>{
   const a=Array.from({length:12},(_,i)=>record(i,{actualMinutes:i%2?55:65}));
   const result=evaluateDurationEstimates(owner,a);
