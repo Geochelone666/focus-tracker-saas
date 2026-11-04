@@ -70,3 +70,11 @@ Phase 1 follows gate clearance; Phases 2–6 retain the order in the roadmap.
 
 Browser authentication is a local fixture. SQL test identities do not establish
 hosted GoTrue login coverage. The demo screenshot is not a real saved proposal.
+- Auth-guard Chromium regression: 12 protected routes, forged-cookie rejection,
+  login error state and 390px checks passed.
+- Optional mobile `npm run typecheck`: passed.
+
+Delivery: branch `feat/f2-phase0-integration` pushed successfully. Creating the
+requested draft PR failed with GitHub GraphQL `Forbidden`; no PR number or
+external CI result is claimed. Git transport remains usable. No main merge was
+performed. PR text is prepared locally at `/tmp/f2-phase0-pr.md` for retry.
