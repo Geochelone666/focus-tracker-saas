@@ -61,6 +61,26 @@ begin
     or (select scheduled_time from public.schedules where id='f3011111-1111-4111-8111-111111111111') is distinct from initial_time then
     raise exception 'CAS undo did not restore prior state';
   end if;
+  -- A true date postponement increments deferral_count on confirm, while
+  -- inverse CAS must restore its prior derived counter.
+  select updated_at into stamp from public.schedules
+    where id='f3011111-1111-4111-8111-111111111111';
+  draft_id:=public.stage_calendar_draft(
+    jsonb_build_array(jsonb_build_object('id','f3011111-1111-4111-8111-111111111111',
+      'expected_updated_at',stamp,'start_at','2027-06-16T17:00:00Z',
+      'end_at','2027-06-16T17:30:00Z')),
+    '[{"start_at":"2027-06-16T16:00:00Z","end_at":"2027-06-16T21:00:00Z"}]',2);
+  confirm_result:=public.confirm_calendar_draft(draft_id,'f3555555-5555-4555-8555-555555555555');
+  receipt_id:=(confirm_result->>'receipt_id')::uuid;
+  if (select deferral_count from public.schedules
+      where id='f3011111-1111-4111-8111-111111111111')<>1 then
+    raise exception 'Confirmation did not record postponement';
+  end if;
+  perform public.undo_calendar_plan(receipt_id,'f3666666-6666-4666-8666-666666666666');
+  if (select deferral_count from public.schedules
+      where id='f3011111-1111-4111-8111-111111111111')<>0 then
+    raise exception 'Undo failed to restore deferral counter';
+  end if;
   -- Stale plan revision cannot stage another confirmed plan against version zero.
   begin
     perform public.stage_calendar_draft(
