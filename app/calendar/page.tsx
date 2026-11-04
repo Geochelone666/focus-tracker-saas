@@ -35,6 +35,7 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
     <main className="mx-auto max-w-5xl px-4 py-10 text-slate-900">
       <h1 className="text-3xl font-bold">Schedules & Calendar</h1>
       <p className="mt-2 mb-6 text-slate-600">Plan your day and check off your progress. Time and notes are optional.</p>
+      {process.env.FOCUS_SMART_CALENDAR_ENABLED==='true'&&<p className="mb-4"><Link href="/calendar/smart-plan" className="underline">Plan your time (experimental)</Link></p>}
       <p className="mb-4 text-sm"><Link href="/calendar/smart-preview" className="font-medium underline underline-offset-4">Try Smart Calendar interactive demo (fixed example only)</Link> · No changes are saved.</p>
       {typeof searchParams.error === 'string' && <p role="alert" className="mb-4 rounded bg-red-50 p-4 text-red-800">{searchParams.error}</p>}
       <nav aria-label="Calendar view" className="mb-4 flex gap-4">{(['day','week','month'] as const).map(item=><Link key={item} href={`?date=${selected}&view=${item}&status=${status}`} aria-current={view===item?'page':undefined} className="capitalize underline">{item}</Link>)}</nav>

@@ -4,6 +4,7 @@ import { expect, it } from 'vitest';
 import fixture from '../../docs/fixtures/smart-calendar-v01-sample.json';
 import { previewSmartCalendar, type SmartCalendarSnapshotV01, type FocusScheduleRow } from './focus-adapter';
 import { calendarDraftArguments } from './plan-wire';
+import { liveCalendarPreview, type CalendarRead } from './live-preview';
 
 it('encodes selected changes without losing revisions or confusing UUID and CAS versions', () => {
   const snapshot = structuredClone(fixture.snapshot) as SmartCalendarSnapshotV01;
@@ -52,17 +53,26 @@ it('feeds actual algorithm output into migrated stage/confirm/replay/undo RPCs',
       base_version_id: null, schedules: schedules.rows, busy_intervals: [], accepted_blocks: [], focus_sessions: [],
       availability: [{user_id:owner,start_at:'2027-06-15T09:00:00Z',end_at:'2027-06-15T17:00:00Z'}],
     };
-    const { output } = previewSmartCalendar(snapshot);
+    const read = (await db.query<{snapshot:CalendarRead}>('select calendar_preview_snapshot() as snapshot')).rows[0].snapshot;
+    expect(read.revision).toBe('0');
+    expect(read.schedules).toHaveLength(1);
+    const { output } = liveCalendarPreview(read,owner,{date:'2027-06-15',days:1,start:'09:00',end:'17:00'});
     const args = calendarDraftArguments(output, {userId:owner,timezone:'UTC',revision:'0',availability:snapshot.availability}, [task]);
-    const staged = await db.query<{id:string}>('select stage_calendar_draft($1::jsonb,$2::jsonb,$3::bigint) as id',
+    const staged = await db.query<{id:string}>("select stage_calendar_preview($1::jsonb,$2::jsonb,$3::bigint,'UTC') as id",
       [JSON.stringify(args.p_changes),JSON.stringify(args.p_availability),args.p_base_revision]);
     const draft = staged.rows[0].id;
     const confirm = () => db.query<{receipt: {receipt_id:string}}>('select confirm_calendar_draft($1,$2) as receipt', [draft,request]);
     const first = await confirm();
     expect((await confirm()).rows[0].receipt).toMatchObject({receipt_id:first.rows[0].receipt.receipt_id,revision:1,replay:true});
     expect((await db.query('select scheduled_time::text as time from schedules where id=$1',[task])).rows).toEqual([{time:'09:00:00'}]);
+    const savedRead=(await db.query<{snapshot:CalendarRead}>('select calendar_preview_snapshot() as snapshot')).rows[0].snapshot;
+    expect(savedRead.accepted_ids).toEqual([task]);
+    expect(savedRead.undo_receipt_id).toBe(first.rows[0].receipt.receipt_id);
+    expect(liveCalendarPreview(savedRead,owner,{date:'2027-06-15',days:1,start:'09:00',end:'17:00'}).output.placements[0].reason_codes).toContain('PRESERVED_ACCEPTED');
+    await expect(db.query("select stage_calendar_preview($1::jsonb,$2::jsonb,'1','America/Toronto')",[JSON.stringify(args.p_changes),JSON.stringify(args.p_availability)])).rejects.toThrow(/Timezone changed/);
     await db.query("select set_config('request.jwt.claim.sub',$1,false)", [other]);
     expect((await db.query('select * from calendar_plan_receipts')).rows).toEqual([]);
+    expect((await db.query<{snapshot:CalendarRead}>('select calendar_preview_snapshot() as snapshot')).rows[0].snapshot.schedules).toEqual([]);
     await expect(confirm()).rejects.toThrow();
     await db.query("select set_config('request.jwt.claim.sub',$1,false)", [owner]);
     const receipt = (await db.query<{id:string}>('select id from calendar_plan_receipts')).rows[0].id;

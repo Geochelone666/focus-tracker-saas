@@ -37,10 +37,11 @@ through stage, confirm, idempotent replay, other-owner denial, undo and replay.
    The adapter document is the proposed cross-boundary schema. The older
    `smart-calendar-integration.md` is historical design, not a second API.
 2. **Implemented locally:** integrated algorithm/backend/QA and wire encoding.
-3. **Pending:** authenticated bounded snapshot loader and real preview actions/UI.
-   The existing `/calendar/smart-preview` is still an explicit fixture demo.
-   No demo confirmation is claimed as a saved plan. Keep commit disabled until
-   the consistent snapshot/provenance and version mapping are reviewed.
+3. **Implemented experimentally:** bounded statement-consistent snapshot and real
+   preview/selection/edit/confirm/reload/undo at `/calendar/smart-plan`. See
+   [the live workflow receipt](f2-live-calendar.md). Feature flag defaults off.
+   The existing `/calendar/smart-preview` remains an explicit fixture demo.
+   Independent contract/security/design review remains required before release.
 4. **Locally verified:** PostgreSQL 17 independent-connection locking and atomic
    rollback, two SQL identities under RLS, confirmation/replay/undo and disposable
    rollback preserving tasks. These are not two real GoTrue logins.

@@ -97,3 +97,15 @@ The final V1 branch adds [planned versus actual review](docs/planned-actual.md):
 ## Installable phone app and background notifications
 
 Use the installed web app on iOS/iPadOS 16.4+ or supported Android browsers; developer accounts are not required. Phone notification permissions are opt-in, reminders run on the server, and the app can be closed. This release requires the mobile push migration plus VAPID/server environment variables and a minute scheduler **before enabling production reminders**. Follow [phone setup and limitations](docs/phone-notifications.md). The optional [native Expo client](mobile/README.md) is source for future signed builds; JavaScript exports are not installable APK/IPA packages.
+
+## Experimental Smart Calendar integration
+
+The integration branch includes a real owner-scoped preview → select/edit → confirm
+→ reload → undo workflow at `/calendar/smart-plan`. It is disabled by default.
+For an isolated test environment only, apply the reviewed integration migrations
+through `20261104000000_calendar_preview_snapshot.sql`, then set
+`FOCUS_SMART_CALENDAR_ENABLED=true`. The calendar displays the experimental entry.
+The separate `/calendar/smart-preview` remains a fixed-data demonstration.
+See [workflow, deployment and rollback notes](docs/f2-live-calendar.md) and
+[Phase 0 gates](docs/f2-phase0-integration.md). This does not clear the hosted
+migration drift, contract agreement or production release gates.

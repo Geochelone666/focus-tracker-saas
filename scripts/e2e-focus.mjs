@@ -48,6 +48,10 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/calendar_preview_snapshot') return (await db.query('select public.calendar_preview_snapshot() as value')).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/stage_calendar_preview') return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/confirm_calendar_draft') return (await db.query('select public.confirm_calendar_draft($1,$2) as value',[body.p_draft,body.p_request])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/undo_calendar_plan') return (await db.query('select public.undo_calendar_plan($1,$2) as value',[body.p_receipt,body.p_request])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/analytics_report') return (await db.query('select public.analytics_report($1,$2,$3) as report',[body.p_from,body.p_to,body.p_offset??0])).rows[0].report;
           if(url.pathname==='/rest/v1/rpc/task_focus_totals') return (await db.query('select * from public.task_focus_totals($1)',[body.p_ids])).rows;
           if(url.pathname==='/rest/v1/rpc/project_focus_totals') return (await db.query('select * from public.project_focus_totals()')).rows;
@@ -92,7 +96,7 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(fixturePort,'127.0.0.1',resolve));
 let logs='';
-const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
 app.stdout.on('data',chunk=>{logs+=chunk;});app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 const rows=()=>serial(async()=>(await db.query('select * from public.focus_sessions order by created_at,id')).rows);
@@ -300,6 +304,47 @@ try {
   await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-mobile.png',fullPage:true});
   await a.setViewportSize({width:1280,height:900});
   await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-desktop.png',fullPage:true});
+  // Real experimental UI -> algorithm -> staging -> atomic SQL -> reload -> CAS undo.
+  const smartId='77777777-7777-4777-8777-777777777777';
+  await serial(()=>db.query("insert into schedules(id,user_id,title,estimated_minutes) values($1,$2,'Smart calendar integration task',60)",[smartId,owner]));
+  const future=new Date(Date.now()+86400000*3).toISOString().slice(0,10);
+  await a.setViewportSize({width:390,height:844});
+  await a.goto(base+'/calendar/smart-plan');
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  const smartCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Smart calendar integration task',exact:true})});
+  await smartCard.waitFor();
+  // Choose only this task; leave all other proposals untouched.
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await smartCard.getByLabel('Start for Smart calendar integration task',{exact:true}).fill('14:00');
+  await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).fill('90');
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real preview controls overflow');
+  await a.screenshot({path:'test-artifacts/f2-f02-live-calendar-mobile.png',fullPage:true});
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  await a.getByText('Plan saved. The calendar now shows the saved time blocks.',{exact:true}).waitFor();
+  const persisted=await serial(()=>db.query("select scheduled_date::text as day,scheduled_time::text as time,estimated_minutes as minutes from schedules where id=$1",[smartId]));
+  assert.deepEqual(persisted.rows,[{day:future,time:'14:00:00',minutes:90}]);
+  await a.reload();
+  await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).waitFor();
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real Smart Calendar mobile overflow');
+  await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).click();
+  await a.getByText('Plan undone. Previous task times have been restored.',{exact:true}).waitFor();
+  assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
+    [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await smartCard.waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await serial(()=>db.query("update schedules set title='Changed on another device' where id=$1",[smartId]));
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  await a.getByText('Your tasks or plan changed. Generate a fresh preview before saving.',{exact:true}).waitFor();
+  assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
+    [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
+  console.log('PASS: real Smart Calendar generate / select / manual edit / confirm / reload / undo / stale-device rejection at 390px');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}
