@@ -32,10 +32,11 @@ through stage, confirm, idempotent replay, other-owner denial, undo and replay.
 
 ## Release gates and next work
 
-1. **Pending:** read Issue #74 and obtain the required contract confirmations.
-   Current GitHub API returns Forbidden; branch documents remain proposals.
-   The adapter document is the proposed cross-boundary schema. The older
-   `smart-calendar-integration.md` is historical design, not a second API.
+1. **Read, not release-approved:** Issue #74 was inspected through the public
+   GitHub page on 2026-11-05 (API still Forbidden). It is the authoritative
+   interface baseline; its algorithm/backend comments request further review,
+   not final sign-off. Local adapter documents are implementation notes. See
+   [the current roadmap status](f2-roadmap-status.md) for unresolved protocol gaps.
 2. **Implemented locally:** integrated algorithm/backend/QA and wire encoding.
 3. **Implemented experimentally:** bounded statement-consistent snapshot and real
    preview/selection/edit/confirm/reload/undo at `/calendar/smart-plan`. See
@@ -45,8 +46,11 @@ through stage, confirm, idempotent replay, other-owner denial, undo and replay.
 4. **Locally verified:** PostgreSQL 17 independent-connection locking and atomic
    rollback, two SQL identities under RLS, confirmation/replay/undo and disposable
    rollback preserving tasks. These are not two real GoTrue logins.
-5. **Pending:** Issue #55 hosted migration reconciliation. The preflight checker
-   is integrated and read-only; no hosted snapshot is available in this session.
+5. **Blocked:** Issue #55 remains open. Its public handoff reports mismatched
+   registry IDs across the full main history. A [33-file worksheet](f2-migration-worksheet.md)
+   records local hashes and the six documented aliases; the other reported remote
+   rows and current SQL effects still need a complete hosted snapshot. Partial
+   metadata correctly fails the read-only preflight.
 6. **Pending:** GitHub CI, Vercel Preview, independent QA/design review at the
    combined SHA, hosted auth and physical-device acceptance.
 
@@ -79,3 +83,7 @@ Delivery: branch `feat/f2-phase0-integration` pushed successfully. Creating the
 requested draft PR failed with GitHub GraphQL `Forbidden`; no PR number or
 external CI result is claimed. Git transport remains usable. No main merge was
 performed. PR text is prepared locally at `/tmp/f2-phase0-pr.md` for retry.
+
+The user subsequently authorized PR creation and merge after GitHub checks pass.
+That supersedes older no-merge wording as an authorization constraint; it does not
+make missing CI, independent review or hosted acceptance evidence pass.

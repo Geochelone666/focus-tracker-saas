@@ -134,3 +134,14 @@ requires keeping this UI disabled. Neither rollback requires deleting task data.
   document overflow was detected.
 - GitHub API access still returns Forbidden. No PR creation, remote CI, hosted
   migration, independent review or production acceptance is claimed.
+
+### Canonical-contract follow-up
+
+Public Issue #74 was read on 2026-11-05; the API remains inaccessible. Its explicit
+concurrent-INSERT gate now has a real PostgreSQL regression: one connection inserts
+an uncommitted overlapping task while another confirms a staged draft. A lock wait
+is observed before the insert commits. Confirmation then rejects the new overlap,
+leaves the selected task untouched, creates no receipt and does not increment the
+plan revision. The full PostgreSQL concurrency/owner/rollback runner passed with
+this additional case. This does not clear the separate hosted identity and release
+gates documented in [the roadmap status](f2-roadmap-status.md).

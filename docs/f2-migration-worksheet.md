@@ -1,0 +1,47 @@
+# Offline migration reconciliation worksheet — 2026-11-05
+
+Application baseline inspected: `75107e8`; main: `6c53e29`. This is a **partial evidence worksheet**, not a migration repair plan or a complete remote inventory.
+
+[Issue #55](https://github.com/Geochelone666/focus-tracker-saas/issues/55) and its [architecture handoff](https://github.com/Geochelone666/focus-tracker-saas/issues/55#issuecomment-6620678564) were read through the public GitHub page. The handoff reports 25 main migrations, 17 hosted registry rows and zero matching version strings as of its inspection. The current integration adds 8 migrations. No live database metadata was available here.
+
+All SQL effects remain **not independently verified against the hosted project in this session**. The six candidate mappings below are quoted from #55, not inferred from filenames. The other 11 reported remote rows are unknown; no complete matrix or parity claim is possible. Prior production receipts are historical evidence, not a fresh schema inspection.
+
+| Local file | Scope | SHA-256 | Candidate hosted version/name from #55 |
+|---|---|---|---|
+| [001_create_focus_sessions.sql](../supabase/migrations/001_create_focus_sessions.sql) | main | `156af652e501614c31fc5a190f2fbfdd6ea20b1759ffb5f351fdbca3b95e8866` | Unknown — requires complete remote inventory |
+| [002_create_skills.sql](../supabase/migrations/002_create_skills.sql) | main | `e9afc11f6156b96d31a715af612d3b0b79002922391c40fe832db593ceceebb4` | Unknown — requires complete remote inventory |
+| [003_focus_sessions_rls.sql](../supabase/migrations/003_focus_sessions_rls.sql) | main | `5a7fc797911a13c4ed3bb24ec24d028f53fec38db40a437f98030c1120751624` | Unknown — requires complete remote inventory |
+| [004_skills_rls.sql](../supabase/migrations/004_skills_rls.sql) | main | `67dedf8e4a530fea21d39a5889790f4801bb92efddc6b244a01b069e450da7cd` | Unknown — requires complete remote inventory |
+| [005_active_session_unique.sql](../supabase/migrations/005_active_session_unique.sql) | main | `d8c4af96efe8d5c42c301b44778112e95fa04764d1d77073b4ff10ee4688de97` | Unknown — requires complete remote inventory |
+| [006_add_skill_id_to_focus_sessions.sql](../supabase/migrations/006_add_skill_id_to_focus_sessions.sql) | main | `963da3699ffb788b936470360633eb181cb828676b7f5b1c3c64f1a32e8ed37e` | Unknown — requires complete remote inventory |
+| [007_create_profiles.sql](../supabase/migrations/007_create_profiles.sql) | main | `fd9104c46ec24528c62dae5b1e7e65d6792694a73ba8acc303c072356618a506` | Unknown — requires complete remote inventory |
+| [008_create_schedules.sql](../supabase/migrations/008_create_schedules.sql) | main | `7d59b896cc183bf915e3d709c039a9a3ceb0947f24044c6b6a4622c84fe65c48` | Unknown — requires complete remote inventory |
+| [009_planning_workflow.sql](../supabase/migrations/009_planning_workflow.sql) | main | `a96ee5b70f1e97620f2d385a4d32183a80093863485cf425c77ab41c94b03d84` | Unknown — requires complete remote inventory |
+| [20260930002658_enforce_session_skill_ownership.sql](../supabase/migrations/20260930002658_enforce_session_skill_ownership.sql) | main | `1a5ef24bbc93c345b2cacd1e4daa99490a9059152f4dfdc876e37abf0e901701` | Unknown — requires complete remote inventory |
+| [20261022000000_restore_session_schedule_ownership.sql](../supabase/migrations/20261022000000_restore_session_schedule_ownership.sql) | main | `af93bb174b200316cc25f3f52eba1639c0bf68f361824dbf05d42ab7a329c541` | Unknown — requires complete remote inventory |
+| [20261023000000_ai_integrations.sql](../supabase/migrations/20261023000000_ai_integrations.sql) | main | `b2906ffcd4f10ed9b7949efb194634fe9615f602cff06436390f3de757d097f1` | Unknown — requires complete remote inventory |
+| [20261023010000_mobile_push.sql](../supabase/migrations/20261023010000_mobile_push.sql) | main | `fabccfb6b7b8e1a16f01c89e01300bb9b29269671eaccc3b75a9c21b6ee4d798` | Unknown — requires complete remote inventory |
+| [20261024010000_push_catchup_window.sql](../supabase/migrations/20261024010000_push_catchup_window.sql) | main | `36aadb9a3a904b4f7bb2956c516a60d5c61f725c86316f9eea5e2d5d0f885032` | Unknown — requires complete remote inventory |
+| [20261024020000_push_policy_and_index.sql](../supabase/migrations/20261024020000_push_policy_and_index.sql) | main | `13a454e347926a1e75031815b5d27a242982fb9b9c0e3c6ef5603e4dec94195c` | Unknown — requires complete remote inventory |
+| [20261024030000_lock_down_auth_trigger.sql](../supabase/migrations/20261024030000_lock_down_auth_trigger.sql) | main | `9094e1ab58b234a411a804eb2e1b50dc00953f8f70ca3d36fde2d25a42d5e341` | Unknown — requires complete remote inventory |
+| [20261025000000_focus_state.sql](../supabase/migrations/20261025000000_focus_state.sql) | main | `d484f3bf705390f5d42424df3bb952ade7671fafee62df632d70b579640f04b3` | 20261025044752 / focus_v1_20261025000000_state |
+| [20261025010000_focus_cycles.sql](../supabase/migrations/20261025010000_focus_cycles.sql) | main | `a36b10a781352d2b771a933c382e44f54b81716bea87473f9dbd493470d9285b` | 20261025044805 / focus_v1_20261025010000_cycles |
+| [20261025020000_time_blocks.sql](../supabase/migrations/20261025020000_time_blocks.sql) | main | `262a5151af0ce08c7c33ffc7e40356212ebc898e05bbaf5a17b4a05cde040273` | 20261025044816 / focus_v1_20261025020000_time_blocks |
+| [20261025030000_planned_actual.sql](../supabase/migrations/20261025030000_planned_actual.sql) | main | `e48d8595eae5147274cb1ecf82c7c2d70d9e85687f857b17cee48842c12fce9c` | 20261025044829 / focus_v1_20261025030000_planned_actual |
+| [20261025040000_remove_duplicate_schedule_index.sql](../supabase/migrations/20261025040000_remove_duplicate_schedule_index.sql) | main | `3574ad50f67a2c55b223cfc01068407415542a266008997bea2105c5f00cdcd3` | 20261025045528 / focus_v1_20261025040000_remove_duplicate_schedule_index |
+| [20261025050000_cache_auth_identity_in_owner_rls.sql](../supabase/migrations/20261025050000_cache_auth_identity_in_owner_rls.sql) | main | `10d2c177ca04c7e2f29d95c169917a4a2e16a30d6f8cbdd3f8b470277825777c` | 20261025114225 / focus_v1_20261025050000_cache_auth_identity_rls |
+| [20261025060000_validate_ai_schedule_wall_times.sql](../supabase/migrations/20261025060000_validate_ai_schedule_wall_times.sql) | main | `0ad56ae4123e8bbd01a72c48b5d4547debea86543c210e203d5c5ca23198fcbf` | Unknown — requires complete remote inventory |
+| [20261025070000_background_focus_completion.sql](../supabase/migrations/20261025070000_background_focus_completion.sql) | main | `dcd1a0bf992037587408989ea92f37aebb0318f37367c7defd065a5e08b2f223` | Unknown — requires complete remote inventory |
+| [20261025080000_ai_deadlines_and_skills.sql](../supabase/migrations/20261025080000_ai_deadlines_and_skills.sql) | main | `bf0debea24ef95db94d7bef329ac739eca8d304c32d0fb57f2d20baa5cd60701` | Unknown — requires complete remote inventory |
+| [20261101000000_calendar_batch_hardening.sql](../supabase/migrations/20261101000000_calendar_batch_hardening.sql) | integration only | `48b37ba05be3b7492d2b490df230e511e4a56c6153cc75c693b0db7c336f1954` | Unknown — requires complete remote inventory |
+| [20261103000000_calendar_plan_ledger.sql](../supabase/migrations/20261103000000_calendar_plan_ledger.sql) | integration only | `48ffeefec750a0d68c43c66426eb3669ccbd7ca1305a67b6b3f1e645bfc5340d` | Unknown — requires complete remote inventory |
+| [20261103010000_calendar_plan_confirm.sql](../supabase/migrations/20261103010000_calendar_plan_confirm.sql) | integration only | `f9f67ee19131739cc3158c8f049e50545b73dbefb67cee919d8535440ce95a4a` | Unknown — requires complete remote inventory |
+| [20261103020000_calendar_plan_undo.sql](../supabase/migrations/20261103020000_calendar_plan_undo.sql) | integration only | `c70f0a86d23918b4d5dcce360cb6cfb830f2abb4d7ade06285b3cb678131b13a` | Unknown — requires complete remote inventory |
+| [20261103030000_calendar_write_gate.sql](../supabase/migrations/20261103030000_calendar_write_gate.sql) | integration only | `fe8797811cc72898171b8d3f8e17bc72cd2aea25a5b5fbb6f6326cce6f11744a` | Unknown — requires complete remote inventory |
+| [20261103040000_calendar_undo_counter.sql](../supabase/migrations/20261103040000_calendar_undo_counter.sql) | integration only | `852cd0e664034036f9aeb1408ff41d9772519415ffd356d5c6d037187b461a90` | Unknown — requires complete remote inventory |
+| [20261104000000_calendar_preview_snapshot.sql](../supabase/migrations/20261104000000_calendar_preview_snapshot.sql) | integration only | `0bdb222313bcab8f8df0ea3bef8ad07d38404462a7e63fe29a4d23ab755bc3f9` | Unknown — requires complete remote inventory |
+| [20261104010000_calendar_lock_controls.sql](../supabase/migrations/20261104010000_calendar_lock_controls.sql) | integration only | `432ecc6f12272d435b4862b3714ec23c0218f4af796522c0a51adda2f97322f3` | Unknown — requires complete remote inventory |
+
+Before any repair: obtain the intended project’s complete sanitized registry and schema-only snapshot, verify each SQL effect and permission independently, resolve all remote-only rows, then rehearse an explicitly reviewed mapping in a disposable linked instance. Do not rerun SQL merely to fix version bookkeeping. No repair commands or production changes are authorized by this worksheet.
+
+The six public examples were supplied to the existing offline preflight as `complete:false`; it must reject that input as `INCOMPLETE_INVENTORY`. This expected rejection is evidence that incomplete metadata cannot clear the release gate, not evidence that the production schema is missing these migrations.

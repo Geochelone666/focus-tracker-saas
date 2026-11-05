@@ -117,6 +117,44 @@ assert.equal(staleRejected,true,'Identical stale revision must be rejected after
 console.log('PostgreSQL bounded retry: fresh intent accepted, stale replay rejected');
 
 
+// A new, previously invisible block must also serialize against confirmation.
+const phantom='f3544444-4444-4444-8444-444444444444';
+const confirmRequest='f3555555-5555-4555-8555-555555555555';
+const confirmStamp=sql("select updated_at::text from public.schedules where id='"+selected+"';");
+assert.equal(sql("select timezone from public.profiles where user_id='"+owner+"';"),'America/Toronto');
+const authSql="set local role authenticated; select set_config('request.jwt.claim.sub','"+owner+"',true);\n";
+const draftSql="select public.stage_calendar_draft(jsonb_build_array(jsonb_build_object('id','"+selected+"','expected_updated_at','"+confirmStamp+
+ "','start_at','2027-06-15T17:00:00Z','end_at','2027-06-15T18:00:00Z')),"+
+ "'[ {\"start_at\":\"2027-06-15T13:00:00Z\",\"end_at\":\"2027-06-15T22:00:00Z\"} ]'::jsonb,0);";
+const phantomDraft=sql('begin;\n'+authSql+draftSql+'\ncommit;').split('\n').at(-1);
+assert.match(phantomDraft,/^[0-9a-f-]{36}$/);
+const insertHolder=spawn('psql',args,{env:{...env,PGAPPNAME:'focus_insert_holder'},stdio:['pipe','pipe','pipe']});
+let insertOut='',insertErr='';
+insertHolder.stdout.on('data',d=>insertOut+=d);insertHolder.stderr.on('data',d=>insertErr+=d);
+insertHolder.stdin.write('begin;\n'+authSql+
+ "insert into public.schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values('"+phantom+"','"+owner+"','New concurrent meeting','2027-06-15','13:30',60);\nselect 'INSERT_READY';\n");
+await until(()=>insertOut.includes('INSERT_READY'));
+const confirmContender=spawn('psql',args,{env:{...env,PGAPPNAME:'focus_insert_contender'},stdio:['pipe','pipe','pipe']});
+let confirmExit=null,confirmErr='';
+confirmContender.stdout.resume();confirmContender.stderr.on('data',d=>confirmErr+=d);confirmContender.on('exit',code=>confirmExit=code);
+confirmContender.stdin.end('begin;\n'+authSql+"select public.confirm_calendar_draft('"+phantomDraft+"','"+confirmRequest+"');\ncommit;\n");
+let insertWait=false;const insertLimit=Date.now()+8000;
+while(Date.now()<insertLimit&&!insertWait&&confirmExit===null){
+ insertWait=Number(sql("select count(*) from pg_stat_activity where application_name='focus_insert_contender' and wait_event_type='Lock';"))>0;
+ if(!insertWait)await new Promise(r=>setTimeout(r,100));
+}
+insertHolder.stdin.end('commit;\n');
+await until(()=>confirmExit!==null);
+assert.equal(insertWait,true,'Confirmation must wait for the concurrent INSERT');
+assert.equal(insertErr,'');
+assert.notEqual(confirmExit,0,'Confirmation must reject the newly committed overlapping task');
+assert.match(confirmErr,/23P01|Calendar time conflict/);
+assert.equal(sql("select to_char(scheduled_time,'HH24:MI') from public.schedules where id='"+selected+"';"),'10:45');
+assert.equal(sql("select to_char(scheduled_time,'HH24:MI') from public.schedules where id='"+phantom+"';"),'13:30');
+assert.equal(sql("select count(*) from public.calendar_plan_receipts where user_id='"+owner+"' and request_id='"+confirmRequest+"';"),'0');
+assert.equal(sql("select revision from public.calendar_plan_state where user_id='"+owner+"';"),'0');
+console.log('PostgreSQL INSERT phantom: confirmation waited, new overlap rejected, task and ledger unchanged');
+
 // Two devices race to lock the same task from the same unlocked snapshot.
 const lockStamp=sql("select updated_at::text from public.schedules where id='"+selected+"';");
 const lockCall="select public.set_calendar_task_lock('"+selected+"','"+lockStamp+"',null,true);\n";
