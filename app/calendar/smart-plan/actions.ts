@@ -79,3 +79,16 @@ export async function undoCalendarSelection(receiptId:string,requestId:string){
     return {success:true};
   }catch{return {error:failure()};}
 }
+
+export async function setCalendarTaskLock(id:string,expected:string,expectedLock:string|null,locked:boolean){
+  try{
+    validateId(id);
+    if(typeof locked!=='boolean'||typeof expected!=='string'||expected.length>64||!Number.isFinite(Date.parse(expected))||
+      (expectedLock!==null&&(typeof expectedLock!=='string'||expectedLock.length>64||!Number.isFinite(Date.parse(expectedLock)))))return {error:'Reload the task before changing its lock.'};
+    const {supabase}=await context();
+    const {data,error}=await supabase.rpc('set_calendar_task_lock',{p_id:id,p_expected:expected,p_expected_lock:expectedLock,p_locked:locked});
+    if(error)return {error:failure(error.code)};
+    revalidatePath('/calendar/smart-plan');
+    return {locked:data.locked as boolean,lockVersion:data.lock_version as string|null};
+  }catch{return {error:'Could not update the lock. Reload to check its current state before retrying.'};}
+}

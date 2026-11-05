@@ -39,6 +39,7 @@ for(const f of readdirSync(dir).filter(x=>x.endsWith('.sql')).sort()){
 sql("insert into auth.users(id,email) values('"+owner+"','owner@ci.invalid'),('"+other+"','other@ci.invalid');");
 sqlFile(resolve('supabase/tests/calendar_plan_ledger.sql'));
 sqlFile(resolve('supabase/tests/calendar_preview_snapshot.sql'));
+sqlFile(resolve('supabase/tests/calendar_task_lock_controls.sql'));
 console.log('PostgreSQL: version, confirm replay, RLS, undo and rollback regression passed');
 sql([
   'insert into public.schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values',
@@ -116,6 +117,35 @@ assert.equal(staleRejected,true,'Identical stale revision must be rejected after
 console.log('PostgreSQL bounded retry: fresh intent accepted, stale replay rejected');
 
 
+// Two devices race to lock the same task from the same unlocked snapshot.
+const lockStamp=sql("select updated_at::text from public.schedules where id='"+selected+"';");
+const lockCall="select public.set_calendar_task_lock('"+selected+"','"+lockStamp+"',null,true);\n";
+const identity="set local role authenticated; select set_config('request.jwt.claim.sub','"+owner+"',true);\n";
+const lockHolder=spawn('psql',args,{env:{...env,PGAPPNAME:'focus_lock_holder'},stdio:['pipe','pipe','pipe']});
+let holderOut='',holderErr='';
+lockHolder.stdout.on('data',d=>holderOut+=d);lockHolder.stderr.on('data',d=>holderErr+=d);
+lockHolder.stdin.write('begin;\n'+identity+lockCall+"select 'LOCK_CREATED';\n");
+await until(()=>holderOut.includes('LOCK_CREATED'));
+const lockContender=spawn('psql',args,{env:{...env,PGAPPNAME:'focus_lock_contender'},stdio:['pipe','pipe','pipe']});
+let lockExit=null,lockErr='';
+lockContender.stdout.resume();lockContender.stderr.on('data',d=>lockErr+=d);lockContender.on('exit',code=>lockExit=code);
+lockContender.stdin.end('begin;\n'+identity+lockCall+'commit;\n');
+let lockWait=false;const lockLimit=Date.now()+8000;
+while(Date.now()<lockLimit&&!lockWait&&lockExit===null){
+ lockWait=Number(sql("select count(*) from pg_stat_activity where application_name='focus_lock_contender' and wait_event_type='Lock';"))>0;
+ if(!lockWait)await new Promise(r=>setTimeout(r,100));
+}
+lockHolder.stdin.end('commit;\n');
+await until(()=>lockExit!==null);
+assert.equal(lockWait,true,'Lock contender must wait for the first device');
+assert.notEqual(lockExit,0,'Stale device must not overwrite the lock');
+assert.match(lockErr,/40001|Task lock changed/);
+assert.equal(holderErr,'');
+assert.equal(sql("select count(*) from public.calendar_task_locks where schedule_id='"+selected+"';"),'1');
+console.log('PostgreSQL lock race: wait observed, first lock preserved, stale second device rejected');
+
+// Remove newer entrypoints before the original B03-only rollback rehearsal.
+sql('drop function public.set_calendar_task_lock(uuid,timestamptz,timestamptz,boolean); drop function public.stage_calendar_preview(jsonb,jsonb,bigint,text); drop function public.calendar_preview_snapshot();');
 const beforeRollback=sql("select coalesce(jsonb_agg(jsonb_build_object('id',id,'user_id',user_id,'scheduled_time',scheduled_time) order by id),'[]'::jsonb)::text from public.schedules;");
 sqlFile(resolve('supabase/rollback/calendar_plan_rollback.sql'));
 const afterRollback=sql("select coalesce(jsonb_agg(jsonb_build_object('id',id,'user_id',user_id,'scheduled_time',scheduled_time) order by id),'[]'::jsonb)::text from public.schedules;");

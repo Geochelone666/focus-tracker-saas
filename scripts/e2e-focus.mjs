@@ -48,6 +48,7 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/set_calendar_task_lock') return (await db.query('select public.set_calendar_task_lock($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_expected_lock,body.p_locked])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/calendar_preview_snapshot') return (await db.query('select public.calendar_preview_snapshot() as value')).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/stage_calendar_preview') return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/confirm_calendar_draft') return (await db.query('select public.confirm_calendar_draft($1,$2) as value',[body.p_draft,body.p_request])).rows[0].value;
@@ -310,6 +311,22 @@ try {
   const future=new Date(Date.now()+86400000*3).toISOString().slice(0,10);
   await a.setViewportSize({width:390,height:844});
   await a.goto(base+'/calendar/smart-plan');
+  await a.getByText('Protect a task from scheduling',{exact:true}).click();
+  await a.getByLabel('Task to protect',{exact:true}).selectOption(smartId);
+  await a.getByRole('button',{name:'Lock task',exact:true}).click();
+  await a.getByText('Task locked. Generate a fresh preview; its current time will stay fixed.',{exact:true}).waitFor();
+  await a.reload();
+  await a.getByText('Protect a task from scheduling',{exact:true}).click();
+  await a.getByLabel('Task to protect',{exact:true}).selectOption(smartId);
+  await a.getByRole('button',{name:'Unlock task',exact:true}).waitFor();
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await a.getByRole('heading',{name:'Compare your day',exact:true}).waitFor();
+  assert.equal(await a.locator('article').filter({has:a.getByRole('heading',{name:'Smart calendar integration task',exact:true})}).count(),0,'Locked Inbox task must be excluded');
+  await a.getByRole('button',{name:'Unlock task',exact:true}).click();
+  await a.getByText('Task unlocked. Generate a fresh preview. Manually scheduled tasks still keep their time.',{exact:true}).waitFor();
+
   await a.getByLabel('First day').fill(future);
   await a.getByLabel('Days',{exact:true}).fill('1');
   await a.getByRole('button',{name:'Generate preview',exact:true}).click();
@@ -320,6 +337,22 @@ try {
   await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
   await smartCard.getByLabel('Start for Smart calendar integration task',{exact:true}).fill('14:00');
   await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).fill('90');
+  await smartCard.getByText(`On confirmation: ${future} 14:00 (90 min)`,{exact:true}).waitFor();
+  const afterTimeline=a.getByRole('region',{name:'After selection timeline',exact:true});
+  assert.ok((await afterTimeline.innerText()).includes('14:00'),'Timeline reflects manual edit');
+  await a.getByRole('button',{name:'Original plan',exact:true}).click();
+  await a.getByRole('region',{name:'Original plan timeline',exact:true}).waitFor({state:'visible'});
+  await a.getByRole('button',{name:'After selection',exact:true}).click();
+  await a.getByLabel('Work ends',{exact:true}).fill('16:00');
+  assert.equal(await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).isDisabled(),true,'Changing window must invalidate confirmation');
+  assert.equal(await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).inputValue(),'90','Window change preserves unsaved edits');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await a.getByText('Review the selected changes below. Nothing has been saved.',{exact:true}).waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await smartCard.getByLabel('Start for Smart calendar integration task',{exact:true}).fill('14:00');
+  await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).fill('90');
+
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real preview controls overflow');
   await a.screenshot({path:'test-artifacts/f2-f02-live-calendar-mobile.png',fullPage:true});
   await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();

@@ -5,7 +5,7 @@ import { previewSmartCalendar, type FocusScheduleRow, type SmartCalendarSnapshot
 export type CalendarRead = {
   user_id:string; captured_at:string; timezone:string; revision:string;
   version_id:string|null; undo_receipt_id:string|null; has_active_focus:boolean;
-  schedules:(FocusScheduleRow & {title:string})[]; accepted_ids:string[]; locked_ids:string[];
+  schedules:(FocusScheduleRow & {title:string})[]; accepted_ids:string[]; locked_ids:string[]; lock_versions?:Record<string,string>;
 };
 export type PreviewWindow = {date:string; days:number; start:string; end:string};
 export function liveCalendarPreview(read:CalendarRead, owner:string, window:PreviewWindow) {
@@ -38,6 +38,12 @@ export function liveCalendarPreview(read:CalendarRead, owner:string, window:Prev
   };
   const {output}=previewSmartCalendar(snapshot);
   return {output,availability,timezone:read.timezone,revision:read.revision,
-    tasks:read.schedules.map(row=>({id:row.id,title:row.title,date:row.scheduled_date,time:row.scheduled_time,minutes:row.estimated_minutes,locked:locked.has(row.id)}))};
+    tasks:calendarTaskChoices(read)};
 }
 export type LivePreview = ReturnType<typeof liveCalendarPreview>;
+
+export function calendarTaskChoices(read:CalendarRead){
+  return read.schedules.map(row=>({id:row.id,title:row.title,date:row.scheduled_date,time:row.scheduled_time,minutes:row.estimated_minutes,
+    locked:read.locked_ids.includes(row.id),revision:row.updated_at,lockVersion:read.lock_versions?.[row.id]??null}));
+}
+export type CalendarTaskChoice=ReturnType<typeof calendarTaskChoices>[number];

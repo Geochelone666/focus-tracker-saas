@@ -103,7 +103,7 @@ Use the installed web app on iOS/iPadOS 16.4+ or supported Android browsers; dev
 The integration branch includes a real owner-scoped preview → select/edit → confirm
 → reload → undo workflow at `/calendar/smart-plan`. It is disabled by default.
 For an isolated test environment only, apply the reviewed integration migrations
-through `20261104000000_calendar_preview_snapshot.sql`, then set
+through `20261104010000_calendar_lock_controls.sql`, then set
 `FOCUS_SMART_CALENDAR_ENABLED=true`. The calendar displays the experimental entry.
 The separate `/calendar/smart-preview` remains a fixed-data demonstration.
 See [workflow, deployment and rollback notes](docs/f2-live-calendar.md) and
