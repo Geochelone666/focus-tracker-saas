@@ -14,7 +14,7 @@ trial, privacy, mobile and public-release work; it is separate from the source.
 | 3: personalization | Pure historical estimator/evaluation helpers and synthetic benchmarks exist | Authorized sufficient real pilot data, repeatable improvement over baseline; no production personalization enabled |
 | 4: external integrations | No Google/Outlook calendar connection delivered | OAuth application configuration, authorized test calendars, owner-isolated read-only sync/revocation testing; writeback remains separately opt-in |
 | 5: advanced planning/AI | Baseline deterministic scheduling and existing scoped AI/MCP entrypoints | Evidence-driven splitting/dependencies/capacity work after stable earlier stages; optional AI must not become a hard dependency |
-| 6: maturity | Existing web/mobile foundation, CSV and error states; user-requested supplemental plan defines trial/public-release acceptance | Guided onboarding, complete data export, account deletion/privacy, operational recovery and real-device acceptance; not delivered |
+| 6: maturity | Existing web/mobile foundation and CSV; experimental paginated account JSON export with fixed projections and explicit read consistency; supplemental plan defines trial/public-release acceptance | Hosted export acceptance, guided onboarding, account deletion/privacy, operational recovery and real-device acceptance; not delivered |
 
 ## Fresh source inspection
 
@@ -73,3 +73,10 @@ The [work-hours increment](f2-work-hours.md) is stacked next on
 `feat/f2-authoritative-work-hours`, with migration file 35. It closes the
 client-only work-window authority gap for the new preview workflow. These local
 implementation updates do not change the hosted access or review prerequisites.
+
+The independent [account-export increment](f2-account-export.md) is stacked on
+`feat/f2-account-data-export`, with migration file 36 and its own default-off flag.
+Recovery-to-rescheduling still needs separate task-estimate and future-block-length
+semantics: using `remaining_minutes` to overwrite the existing `estimated_minutes`
+would change the planned-vs-actual baseline. That model change has not been hidden
+inside this export work or claimed as complete.

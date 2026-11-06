@@ -42,6 +42,7 @@ sqlFile(resolve('supabase/tests/calendar_preview_snapshot.sql'));
 sqlFile(resolve('supabase/tests/calendar_task_lock_controls.sql'));
 sqlFile(resolve('supabase/tests/execution_recovery.sql'));
 sqlFile(resolve('supabase/tests/calendar_work_preferences.sql'));
+sqlFile(resolve('supabase/tests/account_export.sql'));
 console.log('PostgreSQL: version, confirm replay, RLS, undo and rollback regression passed');
 sql([
   'insert into public.schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values',

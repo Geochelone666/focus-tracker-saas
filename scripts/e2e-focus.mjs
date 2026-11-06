@@ -32,6 +32,7 @@ const user={id:owner,email:'focus@example.invalid',aud:'authenticated',role:'aut
 const jwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+86400},'fixture-signature'].map((v,i)=>i===2?v:Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
 const safe = value => { if(!/^[a-z_][a-z_0-9]*$/.test(value)) throw new Error('Unsupported fixture identifier');return `"${value}"`; };
 const operations=[];
+let failAccountExport=false;
 const server=createServer(async(req,res)=>{
   const began=Date.now(),path=new URL(req.url,"http://fixture").pathname;operations.push(`start ${req.method} ${path}`);
   res.on("finish",()=>operations.push(`done ${req.method} ${path}: ${res.statusCode} (${Date.now()-began}ms)`));
@@ -48,6 +49,8 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/account_export_page'&&failAccountExport) throw new Error('Fixture export failure');
+          if(url.pathname==='/rest/v1/rpc/account_export_page') return (await db.query('select public.account_export_page($1,$2,$3) as value',[body.p_collection,body.p_after,body.p_limit])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/task_recovery_snapshot') return (await db.query('select public.task_recovery_snapshot($1,$2,$3) as value',[body.p_from,body.p_to,body.p_offset??0])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/save_task_recovery') return (await db.query('select public.save_task_recovery($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_remaining,body.p_note])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/set_calendar_task_lock') return (await db.query('select public.set_calendar_task_lock($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_expected_lock,body.p_locked])).rows[0].value;
@@ -101,7 +104,7 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(fixturePort,'127.0.0.1',resolve));
 let logs='';
-const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',FOCUS_EXECUTION_RECOVERY_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',FOCUS_EXECUTION_RECOVERY_ENABLED:'true',FOCUS_DATA_EXPORT_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
 app.stdout.on('data',chunk=>{logs+=chunk;});app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 const rows=()=>serial(async()=>(await db.query('select * from public.focus_sessions order by created_at,id')).rows);
@@ -452,6 +455,38 @@ try {
   assert.equal(afterRecovery.rows[0].is_done,false,'Finishing focus must not complete task');
   assert.equal(afterRecovery.rows[0].estimated_minutes,60);assert.equal(afterRecovery.rows[0].remaining_minutes,30);
   console.log('PASS: recovery context / reload / stale edit preservation / calendar focus / pause / resume / finish without task completion');
+  // Export multiple keyset pages through the real route and native browser download.
+  await serial(async()=>{
+    await db.query("insert into schedules(user_id,title) select $1,'Export task '||i from generate_series(1,105) i",[owner]);
+    await db.query("insert into integration_tokens(user_id,name,scope,token_hash,expires_at) values($1,'Export credential check','read',repeat('f',64),now()+interval '1 day')",[owner]);
+  });
+  await a.goto(base+'/settings');
+  await a.getByRole('link',{name:'Download your data',exact:true}).click();
+  await a.getByRole('heading',{name:'Download your data',exact:true}).waitFor();
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Data page overflow at 390px');
+  await a.screenshot({path:'test-artifacts/f2-f02-account-export-mobile.png',fullPage:true});
+  failAccountExport=true;
+  await a.getByRole('link',{name:'Download account JSON',exact:true}).click();
+  await a.getByRole('alert').filter({hasText:'Your data could not be downloaded'}).waitFor();
+  failAccountExport=false;
+  const downloadReady=a.waitForEvent('download');
+  await a.getByRole('link',{name:'Download account JSON',exact:true}).click();
+  const download=await downloadReady;
+  assert.equal(await download.failure(),null);
+  assert.match(download.suggestedFilename(),/^focus-account-.*\.json$/);
+  const accountText=await readFile(await download.path(),'utf8');
+  const account=JSON.parse(accountText);
+  assert.equal(account.format,'focus-account/v1');assert.equal(account.complete,true);assert.equal(account.owner_id,owner);
+  const ownedTasks=(await serial(()=>db.query('select count(*)::int as n from schedules where user_id=$1',[owner]))).rows[0].n;
+  assert.equal(account.counts.tasks,ownedTasks);assert.equal(account.data.tasks.length,ownedTasks);
+  assert.equal(new Set(account.data.tasks.map(task=>task.id)).size,ownedTasks,'Export must not repeat tasks at page boundaries');
+  assert.equal(account.data.tasks.find(task=>task.id===recoveryId).resume_note,'Resume at the SQL regression checks');
+  assert.ok(account.data.focus_sessions.some(session=>session.session_kind==='short_break'));
+  assert.ok(account.data.ai_connections.some(connection=>connection.name==='Export credential check'));
+  assert.ok(!accountText.includes('token_hash')&&!accountText.includes('f'.repeat(64)),'Export must omit credential hashes');
+  assert.ok(account.data.work_preferences.length===1,'Saved work hours must be portable');
+  assert.equal((await first.request.get(base+'/history/export')).status(),200,'Existing CSV must still work');
+  console.log('PASS: native account JSON download / paginated tasks / recovery and work preferences / credential exclusion / 390px layout');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}

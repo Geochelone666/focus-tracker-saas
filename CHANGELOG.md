@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — account data export
+
+- Add a Settings download for account JSON, covering tasks/Trash, projects, focus/break records, recovery context, reflections, calendar history and preferences; retain the existing CSV export.
+- Stream bounded owner-scoped keyset pages, preserve exact bigint IDs and timestamps, and exclude credentials through fixed field projections. Include consistency metadata and a final completion marker; abort failed downloads and support retry/cancellation.
+- Requires `20261106020000_account_export.sql` and default-off `FOCUS_DATA_EXPORT_ENABLED`. See [format, limits and rollback](docs/f2-account-export.md); hosted streaming/auth acceptance remains outstanding.
+
 ## Unreleased — persisted Smart Calendar work hours
 
 - Save work hours across devices with owner-scoped revision checks; preserve stale-device edits and require regeneration after a work-window change.
