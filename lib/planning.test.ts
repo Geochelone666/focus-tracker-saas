@@ -30,6 +30,9 @@ describe('timezone-aware planning', () => {
     expect(groupSecondsByDay([{started_at:now.toISOString(),duration_sec:60}],['2026-10-20'],'Asia/Shanghai').get('2026-10-20')).toBe(60);
   });
   it('falls back safely on invalid timezone settings',()=>expect(timezone('not/a/timezone')).toBe('America/Toronto'));
+  it('falls back safely on a null timezone setting',()=>expect(timezone(null)).toBe('America/Toronto'));
+  it.each([42,{}])('falls back safely on a non-string timezone setting %j',value=>expect(timezone(value)).toBe('America/Toronto'));
+  it('falls back safely on a timezone setting longer than 100 characters',()=>expect(timezone('a'.repeat(101))).toBe('America/Toronto'));
   it('adds calendar days across DST without shifting the date',()=>expect(addDays('2026-03-08',1)).toBe('2026-03-09'));
   it('reminds only for valid timed plans due in the next ten minutes',()=>{
     const items=[{id:'a',title:'Soon',scheduled_date:'2026-10-20',scheduled_time:'09:10:00'},{id:'b',title:'Later',scheduled_date:'2026-10-20',scheduled_time:'09:11:00'},{id:'c',title:'Untimed',scheduled_date:'2026-10-20',scheduled_time:null}];
