@@ -1,4 +1,5 @@
 import { describe,expect,it } from 'vitest';
+import { getMidnightInTimeZone } from './analytics';
 import { taskInterval,wallTimeInstants,conflictingTasks,dayBlockLayout } from './time-blocks';
 import type { Schedule } from './planning';
 const task=(id:string,time='14:00',minutes=90):Schedule=>({id,title:id,scheduled_date:'2026-10-24',scheduled_time:time,estimated_minutes:minutes,is_done:false,deleted_at:null,notes:null,priority:'normal',energy:null,project_id:null,skill_id:null,series_id:null,deferral_reason:null});
@@ -27,4 +28,17 @@ it('splits overnight blocks and keeps overlapping tasks in distinct lanes',()=>{
  const a={...task('night','23:30',90)},b={...task('overlap','23:45',30)};
  const first=dayBlockLayout([a,b],'2026-10-24','UTC');expect(first.lanes).toBe(2);expect(first.segments[0]).toMatchObject({top:1410,height:30,carries:true});
  expect(dayBlockLayout([a],'2026-10-25','UTC').segments[0]).toMatchObject({top:0,height:60,continued:true});
+});
+
+it('places the second 01:30 at its wall position on a 25-hour fall-back day',()=>{
+ const a={...task('fold','01:30',30),scheduled_date:'2026-11-01'},zone='America/Toronto';
+ const from=getMidnightInTimeZone(new Date('2026-11-01T00:00:00Z'),zone).getTime();
+ const until=getMidnightInTimeZone(new Date('2026-11-02T00:00:00Z'),zone).getTime();
+ expect(from).toBe(Date.parse('2026-11-01T04:00:00Z'));
+ expect(until).toBe(Date.parse('2026-11-02T05:00:00Z'));
+ expect(until-from).toBe(25*60*60*1000);
+ const layout=dayBlockLayout([a],'2026-11-01',zone);
+ expect(layout).toMatchObject({dst:true});
+ expect(layout.segments).toHaveLength(1);
+ expect(layout.segments[0]).toMatchObject({top:90,height:30,interval:{start:Date.parse('2026-11-01T06:30:00Z'),end:Date.parse('2026-11-01T07:00:00Z'),ambiguous:true}});
 });
