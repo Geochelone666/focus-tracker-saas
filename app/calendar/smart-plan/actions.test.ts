@@ -6,7 +6,7 @@ vi.mock('@/lib/smart-scheduler/live-preview',()=>import('../../../lib/smart-sche
 vi.mock('@/lib/validation',()=>import('../../../lib/validation'));
 vi.mock('@/lib/wall-time',()=>import('../../../lib/wall-time'));
 vi.mock('@/lib/calendar',()=>import('../../../lib/calendar'));
-import { generateCalendarPreview,stageCalendarSelection,confirmCalendarSelection,undoCalendarSelection,setCalendarTaskLock } from './actions';
+import { generateCalendarPreview,stageCalendarSelection,confirmCalendarSelection,undoCalendarSelection,setCalendarTaskLock,saveCalendarWorkHours } from './actions';
 const id='11111111-1111-4111-8111-111111111111';
 beforeEach(()=>{vi.clearAllMocks();vi.stubEnv('FOCUS_SMART_CALENDAR_ENABLED','true');mock.getUser.mockResolvedValue({data:{user:{id}},error:null});});
 it('gates all actions when the feature is disabled',async()=>{
@@ -24,10 +24,10 @@ it('requires authenticated identity before any RPC',async()=>{
 });
 it('binds account-local manual edits and exact revision to guarded staging',async()=>{
   mock.rpc.mockResolvedValue({data:id,error:null});
-  expect(await stageCalendarSelection({timezone:'America/Toronto',revision:'9007199254740993',
+  expect(await stageCalendarSelection({timezone:'America/Toronto',revision:'9007199254740993',contract:{schema_version:'smart-calendar/v0.1',input_fingerprint:'sha256:'+'a'.repeat(64),base_version_id:null,work_revision:'1'},
     availability:[{start_at:'2027-06-15T13:00:00Z',end_at:'2027-06-15T21:00:00Z'}],
     changes:[{id,expected_updated_at:'2026-11-04T12:00:00.123456Z',date:'2027-06-15',time:'14:00',minutes:90}]})).toEqual({draftId:id});
-  expect(mock.rpc).toHaveBeenCalledWith('stage_calendar_preview',expect.objectContaining({p_timezone:'America/Toronto',p_base_revision:'9007199254740993',p_changes:[{id,expected_updated_at:'2026-11-04T12:00:00.123456Z',start_at:'2027-06-15T18:00:00Z',end_at:'2027-06-15T19:30:00Z'}]}));
+  expect(mock.rpc).toHaveBeenCalledWith('stage_calendar_preview',expect.objectContaining({p_timezone:'America/Toronto',p_base_revision:'9007199254740993',p_contract:{schema_version:'smart-calendar/v0.1',input_fingerprint:'sha256:'+'a'.repeat(64),base_version_id:null,work_revision:'1'},p_changes:[{id,expected_updated_at:'2026-11-04T12:00:00.123456Z',start_at:'2027-06-15T18:00:00Z',end_at:'2027-06-15T19:30:00Z'}]}));
 });
 it('passes the same request identity on retry and surfaces CAS conflicts',async()=>{
   mock.rpc.mockResolvedValue({data:null,error:{code:'40001',message:'private SQL detail'}});
@@ -43,4 +43,19 @@ it('uses explicit target lock state and exact task/lock versions',async()=>{
   const taskStamp='2026-11-05T12:00:00.123456Z',lockStamp='2026-11-05T12:01:00.654321Z';
   expect(await setCalendarTaskLock(id,taskStamp,lockStamp,false)).toEqual({locked:false,lockVersion:null});
   expect(mock.rpc).toHaveBeenCalledWith('set_calendar_task_lock',{p_id:id,p_expected:taskStamp,p_expected_lock:lockStamp,p_locked:false});
+});
+
+it('saves work hours with exact preference CAS and rejects stale device edits',async()=>{
+  mock.rpc.mockResolvedValue({data:{start:'09:00',end:'17:00',revision:'2'},error:null});
+  expect(await saveCalendarWorkHours('09:00','17:00','1','America/Toronto')).toHaveProperty('preferences.revision','2');
+  expect(mock.rpc).toHaveBeenCalledWith('save_calendar_work_preferences',{p_start:'09:00',p_end:'17:00',p_expected:'1',p_timezone:'America/Toronto'});
+  mock.rpc.mockResolvedValue({data:null,error:{code:'40001'}});
+  expect((await saveCalendarWorkHours('10:00','18:00','1','America/Toronto')).error).toMatch(/another device/);
+});
+it('refuses unsaved work hours and unknown preview envelopes',async()=>{
+  mock.rpc.mockResolvedValue({data:{work_preferences:{start:'09:00',end:'17:00'}},error:null});
+  expect((await generateCalendarPreview({date:'2027-06-15',days:1,start:'08:00',end:'17:00'})).error).toMatch(/Save your work hours/);
+  mock.rpc.mockClear();
+  expect(await stageCalendarSelection({timezone:'UTC',revision:'0',availability:[],changes:[],contract:{schema_version:'unknown',input_fingerprint:'sha256:'+'a'.repeat(64),base_version_id:null,work_revision:'1'}})).toHaveProperty('error');
+  expect(mock.rpc).not.toHaveBeenCalled();
 });

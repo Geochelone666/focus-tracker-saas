@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { schedulingReason } from '@/lib/smart-scheduler/reason-labels';
 import { SmartCalendarComparison } from './smart-calendar-comparison';
 import type { PlanEdit } from '@/lib/smart-scheduler/plan-comparison';
-import type { LivePreview, CalendarTaskChoice } from '@/lib/smart-scheduler/live-preview';
-import { generateCalendarPreview, stageCalendarSelection, confirmCalendarSelection, undoCalendarSelection, setCalendarTaskLock } from '@/app/calendar/smart-plan/actions';
+import type { LivePreview, CalendarTaskChoice, WorkPreferences } from '@/lib/smart-scheduler/live-preview';
+import { generateCalendarPreview, stageCalendarSelection, confirmCalendarSelection, undoCalendarSelection, setCalendarTaskLock, saveCalendarWorkHours } from '@/app/calendar/smart-plan/actions';
 
 type Edit=PlanEdit;
 type Pending={draftId:string;requestId:string};
@@ -15,10 +15,12 @@ function local(iso:string,zone:string){
   return {date:`${get('year')}-${get('month')}-${get('day')}`,time:`${get('hour')}:${get('minute')}`};
 }
 const input='min-h-11 rounded border px-3 py-2 disabled:opacity-50';
-export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks}:{owner:string;today:string;zone:string;latestReceipt:string|null;initialTasks:CalendarTaskChoice[]}){
+export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,initialWorkHours}:{owner:string;today:string;zone:string;latestReceipt:string|null;initialTasks:CalendarTaskChoice[];initialWorkHours:WorkPreferences|null}){
   const router=useRouter();
   const [busy,startTransition]=useTransition();
-  const [date,setDate]=useState(today),[days,setDays]=useState(7),[start,setStart]=useState('09:00'),[end,setEnd]=useState('17:00');
+  const [date,setDate]=useState(today),[days,setDays]=useState(7),[start,setStart]=useState(initialWorkHours?.start??'09:00'),[end,setEnd]=useState(initialWorkHours?.end??'17:00');
+  const [workHours,setWorkHours]=useState(initialWorkHours);
+  const hoursSaved=!!workHours&&workHours.start===start&&workHours.end===end;
   const [preview,setPreview]=useState<LivePreview|null>(null),[edits,setEdits]=useState<Record<string,Edit>>({});
   const [notice,setNotice]=useState(''),[pending,setPending]=useState<Pending|null>(null);
   const [receipt,setReceipt]=useState(latestReceipt),[undoKey,setUndoKey]=useState<string|null>(null);
@@ -26,6 +28,15 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks}:
   const [windowChanged,setWindowChanged]=useState(false);
   const selectedTask=tasks.find(task=>task.id===taskId);
   const changedWindow=()=>{if(preview){setWindowChanged(true);setNotice('Work window changed. Generate a new preview before confirming. Your existing edits remain below.');}};
+  const saveHours=()=>startTransition(async()=>{
+    try{
+      const result=await saveCalendarWorkHours(start,end,workHours?.revision??'0',zone);
+      if(result.error){setNotice(result.error);return;}
+      setWorkHours(result.preferences!);changedWindow();
+      setNotice('Work hours saved across devices. Generate a new preview to use them.');
+      router.refresh();
+    }catch{setNotice('Could not save work hours. Your edits are kept; retry or reload to check the saved hours.');}
+  });
   const changeLock=()=>startTransition(async()=>{
     if(!selectedTask)return;
     try{
@@ -65,6 +76,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks}:
         if(!preview||windowChanged)return;
         const chosen=Object.entries(edits).filter(([,edit])=>edit.selected);
         const result=await stageCalendarSelection({timezone:preview.timezone,revision:preview.revision,availability:preview.availability,
+          contract:{schema_version:preview.output.schema_version,input_fingerprint:preview.output.input_fingerprint,base_version_id:preview.output.base_version_id,work_revision:preview.workRevision!},
           changes:chosen.map(([id,edit])=>({id,expected_updated_at:preview.output.placements.find(p=>p.schedule_id===id)!.expected_updated_at,date:edit.date,time:edit.time,minutes:edit.minutes}))});
         if(result.error){setNotice(result.error);return;}
         operation={draftId:result.draftId!,requestId:crypto.randomUUID()};persist(operation);
@@ -94,9 +106,10 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks}:
       <label>Days<input className={`${input} block w-20`} type="number" min={1} max={14} value={days} required disabled={busy||!!pending} onChange={e=>{setDays(Number(e.target.value));changedWindow();}}/></label>
       <label>Work starts<input className={`${input} block`} type="time" value={start} required disabled={busy||!!pending} onChange={e=>{setStart(e.target.value);changedWindow();}}/></label>
       <label>Work ends<input className={`${input} block`} type="time" value={end} required disabled={busy||!!pending} onChange={e=>{setEnd(e.target.value);changedWindow();}}/></label>
-      <button className={input} disabled={busy||!!pending}>Generate preview</button>
+      <button type="button" className={input} disabled={busy||!!pending||hoursSaved} onClick={saveHours}>Save work hours</button>
+      <button className={input} disabled={busy||!!pending||!hoursSaved}>Generate preview</button>
     </form>
-    <p className="text-sm text-slate-600">The work window applies to each selected day, including weekends. Five-minute breaks are required. Missing estimates use a labelled 30-minute default. You can save up to 50 changes at once.</p>
+    <p className="text-sm text-slate-600">Save work hours once to use them across devices. They apply to each selected day, including weekends. Changing saved hours invalidates older previews. Five-minute breaks are required. Missing estimates use a labelled 30-minute default. You can save up to 50 changes at once.</p>
     <p role="status" aria-live="polite">{busy?'Working…':notice}</p>
     {pending&&<div className="flex flex-wrap gap-3"><button className={input} disabled={busy} onClick={confirm}>Retry pending confirmation</button><button className={input} disabled={busy} onClick={()=>{persist(null);setPreview(null);setEdits({});setNotice('Pending request cleared locally. Check the calendar for saved changes before making a new plan.');router.refresh();}}>Check calendar and start over</button></div>}
     {!!tasks.length&&<details className="rounded border p-4"><summary className="cursor-pointer font-medium">Protect a task from scheduling</summary><p className="my-3 text-sm text-slate-600">Lock a task to keep its current time, or keep an Inbox task unscheduled. Changing a lock clears the current preview. Unlocking a manually scheduled task does not make it movable automatically.</p><div className="flex flex-wrap items-end gap-3"><label className="min-w-0 flex-1">Task<select aria-label="Task to protect" className={`${input} block w-full`} value={taskId} disabled={busy||!!pending} onChange={e=>setTaskId(e.target.value)}>{tasks.map(task=><option key={task.id} value={task.id}>{task.title}{task.locked?' — Locked':''}</option>)}</select></label><button type="button" className={input} disabled={busy||!!pending||!selectedTask} onClick={changeLock}>{selectedTask?.locked?'Unlock task':'Lock task'}</button></div></details>}

@@ -2,17 +2,19 @@
 
 The supplied roadmap is staged by acceptance evidence. This is a status ledger,
 not a claim that implementation or synthetic tests complete the whole roadmap.
-The attachment ends midway through Phase 6, after its mobile bullet.
+The original attachment ends midway through Phase 6. At the user's request, the
+[supplemental delivery plan](focus2-next-plan.md) now specifies the subsequent
+trial, privacy, mobile and public-release work; it is separate from the source.
 
 | Phase | Current evidence | Remaining completion prerequisites |
 |---|---|---|
 | 0: safety/integration | Integrated code, 567 unit/action tests, migrated SQL, real PostgreSQL connection races, fixture browser workflow, offline preflight | Exact-head GitHub CI/Preview, complete hosted registry/schema evidence, two real GoTrue identities, independent contract/security/design agreement |
-| 1: usable Smart Calendar | Experimental real-data preview, selection/edit/confirm/reload/undo, day comparison and versioned locks; default flag off | Resolve protocol and authority gaps below, independent acceptance and hosted end-to-end verification |
+| 1: usable Smart Calendar | Experimental real-data preview, selection/edit/confirm/reload/undo, day comparison, versioned locks, persisted work hours and draft metadata; default flag off | Resolve remaining protocol/authority gaps below, independent acceptance and hosted end-to-end verification |
 | 2: execution/plan feedback | Experimental calendar execution entry, unfinished/interrupted block review, saved remaining estimate/resume context, CAS edits, pagination and mobile browser workflow on `feat/f2-execution-recovery`; reuses V1 focus accounting | Automatic remaining-day suggestions, integration of remaining estimates into planning, and genuine user-journey acceptance; not release-accepted |
 | 3: personalization | Pure historical estimator/evaluation helpers and synthetic benchmarks exist | Authorized sufficient real pilot data, repeatable improvement over baseline; no production personalization enabled |
 | 4: external integrations | No Google/Outlook calendar connection delivered | OAuth application configuration, authorized test calendars, owner-isolated read-only sync/revocation testing; writeback remains separately opt-in |
 | 5: advanced planning/AI | Baseline deterministic scheduling and existing scoped AI/MCP entrypoints | Evidence-driven splitting/dependencies/capacity work after stable earlier stages; optional AI must not become a hard dependency |
-| 6: maturity | Existing web/mobile foundation, CSV and error states | Full remaining requirements (attachment truncated), onboarding/privacy/account-deletion/release and device acceptance; not delivered |
+| 6: maturity | Existing web/mobile foundation, CSV and error states; user-requested supplemental plan defines trial/public-release acceptance | Guided onboarding, complete data export, account deletion/privacy, operational recovery and real-device acceptance; not delivered |
 
 ## Fresh source inspection
 
@@ -27,13 +29,14 @@ statements are not a reason to ask for that authorization again.
 
 Concrete remaining boundary work from that comparison:
 
-- Preview uses the canonical adapter and engine output. The current app staging
-  action accepts local form edits and pins exact row/revision/timezone state,
-  but does not carry the issue's complete logical `schema_version` /
-  `input_fingerprint` request envelope. This needs a reviewed mapping, rather
-  than treating a client fingerprint as an authorization token.
-- Availability is the explicitly chosen draft window, not an authoritative,
-  persisted, versioned preference source. External fixed events are not ingested.
+- Preview uses the canonical adapter and engine output. The staging overload now
+  persists `schema_version`, `input_fingerprint`, parent plan and work revision.
+  The fingerprint is provenance supplied with the preview, not server-attested
+  authority. Independent agreement on that mapping remains outstanding.
+- Work hours are now owner-scoped, persisted and versioned. The new UI drafts
+  validate that revision at stage and confirmation, including change-and-change-
+  back. Legacy drafts validate current saved windows but have no original work
+  revision. External fixed events and weekly exceptions are not ingested.
 - Accepted provenance is reconstructed from unchanged rows in a bounded receipt
   scan. The current snapshot UUID represents the assembled snapshot; that
   representation needs explicit agreement with the accepted-version semantics.
@@ -65,3 +68,8 @@ on that integration branch and kept behind its own default-off flag. Its additiv
 migration is file 34; the earlier 33-file worksheet intentionally describes the
 Phase 0 integration snapshot, not the newer Phase 2 branch. The new local tests
 provide implementation evidence, not a substitute for the remaining gates above.
+
+The [work-hours increment](f2-work-hours.md) is stacked next on
+`feat/f2-authoritative-work-hours`, with migration file 35. It closes the
+client-only work-window authority gap for the new preview workflow. These local
+implementation updates do not change the hosted access or review prerequisites.

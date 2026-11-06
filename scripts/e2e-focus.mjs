@@ -52,6 +52,8 @@ const server=createServer(async(req,res)=>{
           if(url.pathname==='/rest/v1/rpc/save_task_recovery') return (await db.query('select public.save_task_recovery($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_remaining,body.p_note])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/set_calendar_task_lock') return (await db.query('select public.set_calendar_task_lock($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_expected_lock,body.p_locked])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/calendar_preview_snapshot') return (await db.query('select public.calendar_preview_snapshot() as value')).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/save_calendar_work_preferences') return (await db.query('select public.save_calendar_work_preferences($1,$2,$3,$4) as value',[body.p_start,body.p_end,body.p_expected,body.p_timezone])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/stage_calendar_preview'&&body.p_contract) return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4,$5) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone,body.p_contract])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/stage_calendar_preview') return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/confirm_calendar_draft') return (await db.query('select public.confirm_calendar_draft($1,$2) as value',[body.p_draft,body.p_request])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/undo_calendar_plan') return (await db.query('select public.undo_calendar_plan($1,$2) as value',[body.p_receipt,body.p_request])).rows[0].value;
@@ -313,6 +315,11 @@ try {
   const future=new Date(Date.now()+86400000*3).toISOString().slice(0,10);
   await a.setViewportSize({width:390,height:844});
   await a.goto(base+'/calendar/smart-plan');
+  assert.equal(await a.getByRole('button',{name:'Generate preview',exact:true}).isDisabled(),true);
+  await a.getByRole('button',{name:'Save work hours',exact:true}).click();
+  await a.getByText('Work hours saved across devices. Generate a new preview to use them.',{exact:true}).waitFor();
+  await a.reload();
+  assert.equal(await a.getByLabel('Work starts',{exact:true}).inputValue(),'09:00');
   await a.getByText('Protect a task from scheduling',{exact:true}).click();
   await a.getByLabel('Task to protect',{exact:true}).selectOption(smartId);
   await a.getByRole('button',{name:'Lock task',exact:true}).click();
@@ -348,6 +355,8 @@ try {
   await a.getByLabel('Work ends',{exact:true}).fill('16:00');
   assert.equal(await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).isDisabled(),true,'Changing window must invalidate confirmation');
   assert.equal(await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).inputValue(),'90','Window change preserves unsaved edits');
+  await a.getByRole('button',{name:'Save work hours',exact:true}).click();
+  await a.getByText('Work hours saved across devices. Generate a new preview to use them.',{exact:true}).waitFor();
   await a.getByRole('button',{name:'Generate preview',exact:true}).click();
   await a.getByText('Review the selected changes below. Nothing has been saved.',{exact:true}).waitFor();
   for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
@@ -374,6 +383,33 @@ try {
   await smartCard.waitFor();
   for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
   await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  // Another device changes saved hours after this preview was generated.
+  await serial(async()=>{
+    await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+    try{
+      const current=(await db.query('select revision::text from public.calendar_work_preferences where user_id=$1',[owner])).rows[0].revision;
+      await db.query("select public.save_calendar_work_preferences('10:00','18:00',$1,'America/Toronto')",[current]);
+    }finally{await db.exec("reset role; select set_config('request.jwt.claim.sub','',false);");}
+  });
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  await a.getByText('Your tasks or plan changed. Generate a fresh preview before saving.',{exact:true}).waitFor();
+  assert.equal(await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).isChecked(),true,'Work hour conflict preserves selection');
+  await a.getByLabel('Work starts',{exact:true}).fill('08:00');
+  await a.getByRole('button',{name:'Save work hours',exact:true}).click();
+  await a.getByText('Work hours changed on another device. Your edits are kept. Reload before saving.',{exact:true}).waitFor();
+  assert.equal(await a.getByLabel('Work starts',{exact:true}).inputValue(),'08:00','Stale work hour save preserves input');
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Work hours mobile overflow');
+  await a.screenshot({path:'test-artifacts/f2-f02-work-hours-mobile.png',fullPage:true});
+  await a.reload();
+  assert.equal(await a.getByLabel('Work starts',{exact:true}).inputValue(),'10:00');
+  assert.equal(await a.getByLabel('Work ends',{exact:true}).inputValue(),'18:00');
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await smartCard.waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  console.log('PASS: persisted work hours / reload / stale preview rejection / stale preference draft retention at 390px');
   await serial(()=>db.query("update schedules set title='Changed on another device' where id=$1",[smartId]));
   await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
   await a.getByText('Your tasks or plan changed. Generate a fresh preview before saving.',{exact:true}).waitFor();

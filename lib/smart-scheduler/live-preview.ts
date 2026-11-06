@@ -6,7 +6,9 @@ export type CalendarRead = {
   user_id:string; captured_at:string; timezone:string; revision:string;
   version_id:string|null; undo_receipt_id:string|null; has_active_focus:boolean;
   schedules:(FocusScheduleRow & {title:string})[]; accepted_ids:string[]; locked_ids:string[]; lock_versions?:Record<string,string>;
+  work_preferences?:WorkPreferences|null;
 };
+export type WorkPreferences={start:string;end:string;revision:string};
 export type PreviewWindow = {date:string; days:number; start:string; end:string};
 export function liveCalendarPreview(read:CalendarRead, owner:string, window:PreviewWindow) {
   if(read.user_id!==owner)throw new Error('Calendar owner mismatch.');
@@ -37,7 +39,7 @@ export function liveCalendarPreview(read:CalendarRead, owner:string, window:Prev
     }),policy:{breakMinutes:5,defaultEstimateMinutes:30},
   };
   const {output}=previewSmartCalendar(snapshot);
-  return {output,availability,timezone:read.timezone,revision:read.revision,
+  return {output,availability,timezone:read.timezone,revision:read.revision,workRevision:read.work_preferences?.revision??null,
     tasks:calendarTaskChoices(read)};
 }
 export type LivePreview = ReturnType<typeof liveCalendarPreview>;

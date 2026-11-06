@@ -13,6 +13,6 @@ export default async function SmartPlanPage(){
     <h1 className="text-2xl font-semibold">Plan your time</h1>
     <p className="text-sm text-slate-600">Experimental Smart Calendar. Review every change before saving. Manually scheduled tasks stay fixed. All times use {zone}.</p>
     {error?<p role="alert">Calendar preview is unavailable. Check the experimental database setup, then reload.</p>:
-      <SmartCalendarPlan owner={user.id} today={today} zone={zone} latestReceipt={data?.undo_receipt_id??null} initialTasks={data&&data.schedules.length<=500?calendarTaskChoices(data):[]}/>}
+      <SmartCalendarPlan owner={user.id} today={today} zone={zone} latestReceipt={data?.undo_receipt_id??null} initialWorkHours={data?.work_preferences??null} initialTasks={data&&data.schedules.length<=500?calendarTaskChoices(data):[]}/>}
   </main>;
 }

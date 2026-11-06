@@ -24,19 +24,25 @@ export async function generateCalendarPreview(window:PreviewWindow){
   try{
     const {supabase,user}=await context();
     const {data,error}=await supabase.rpc('calendar_preview_snapshot');
-    if(error||!data)return {error:'Calendar preview is unavailable. Check that the experimental migrations are installed.'};
+    if(error||!data)return {error:'Calendar preview is unavailable. Please retry.'};
+    if(!data.work_preferences||data.work_preferences.start!==window.start||data.work_preferences.end!==window.end)
+      return {error:'Save your work hours before generating a preview. If another device changed them, reload to see the saved hours.'};
     try{return {preview:liveCalendarPreview(data as CalendarRead,user.id,window)};}
     catch(error){return {error:error instanceof Error?error.message:'Choose a valid planning window.'};}
   }catch{return {error:'Sign in to an enabled Smart Calendar environment to continue.'};}
 }
 export type CalendarSelection={
   timezone:string; revision:string;
+  contract:{schema_version:string;input_fingerprint:string;base_version_id:string|null;work_revision:string};
   availability:{start_at:string;end_at:string}[];
   changes:{id:string;expected_updated_at:string;date:string;time:string;minutes:number}[];
 };
 export async function stageCalendarSelection(selection:CalendarSelection){
   try{
     const {supabase}=await context();
+    if(!selection?.contract||selection.contract.schema_version!=='smart-calendar/v0.1'||typeof selection.contract.input_fingerprint!=='string'||typeof selection.contract.work_revision!=='string'||!/^sha256:[0-9a-f]{64}$/.test(selection.contract.input_fingerprint)||
+      !/^[1-9]\d*$/.test(selection.contract.work_revision)||BigInt(selection.contract.work_revision)>BigInt('9223372036854775807'))return {error:'Generate a new preview with your saved work hours.'};
+    if(selection.contract.base_version_id!==null)validateId(selection.contract.base_version_id);
     if(!selection||JSON.stringify(selection).length>50000||!Array.isArray(selection.changes)||selection.changes.length<1||selection.changes.length>50||
       new Set(selection.changes.map(x=>x.id)).size!==selection.changes.length||!/^(0|[1-9]\d*)$/.test(selection.revision)||
       BigInt(selection.revision)>BigInt('9223372036854775807')||!Array.isArray(selection.availability)||selection.availability.length<1||selection.availability.length>100)
@@ -55,9 +61,21 @@ export async function stageCalendarSelection(selection:CalendarSelection){
       if(!Number.isFinite(start)||!Number.isFinite(end)||start%60000||end%60000||end<=start)throw new Error('window');
       return {start_at:new Date(start).toISOString().replace('.000Z','Z'),end_at:new Date(end).toISOString().replace('.000Z','Z')};
     });
-    const {data,error}=await supabase.rpc('stage_calendar_preview',{p_changes:changes,p_availability:availability,p_base_revision:selection.revision,p_timezone:selection.timezone});
+    const {data,error}=await supabase.rpc('stage_calendar_preview',{p_changes:changes,p_availability:availability,p_base_revision:selection.revision,p_timezone:selection.timezone,p_contract:selection.contract});
     return error?{error:failure(error.code)}:{draftId:data as string};
   }catch{return {error:'Check your dates, duration and timezone. Sign in again if your session expired.'};}
+}
+
+export async function saveCalendarWorkHours(start:string,end:string,expected:string,timezone:string){
+  try{
+    const {supabase}=await context();
+    if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(start)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(end)||start>=end||
+      typeof expected!=='string'||!/^(0|[1-9]\d*)$/.test(expected)||BigInt(expected)>=BigInt('9223372036854775807'))return {error:'Choose work hours ending after they start.'};
+    const {data,error}=await supabase.rpc('save_calendar_work_preferences',{p_start:start,p_end:end,p_expected:expected,p_timezone:timezone});
+    if(error)return {error:error.code==='40001'?'Work hours changed on another device. Your edits are kept. Reload before saving.':failure(error.code)};
+    revalidatePath('/calendar/smart-plan');
+    return {preferences:data as {start:string;end:string;revision:string}};
+  }catch{return {error:'Could not save work hours. Your edits are kept; retry or reload to check the saved hours.'};}
 }
 export async function confirmCalendarSelection(draftId:string,requestId:string){
   try{
