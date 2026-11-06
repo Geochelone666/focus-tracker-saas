@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — experimental execution recovery
+
+- Start task-linked focus from the calendar; review open time blocks and recently focused Inbox tasks in the account timezone.
+- Save remaining-time estimates and resume notes with revision checks that preserve stale-device drafts; keep original estimates, task completion and focus accounting separate.
+- Add paginated recovery with active-session return, outcome notes and existing rescheduling/task-edit paths; cover cross-midnight and DST boundaries.
+- Requires `20261106000000_execution_recovery.sql` and default-off `FOCUS_EXECUTION_RECOVERY_ENABLED`; see [deployment and rollback](docs/f2-execution-recovery.md). Hosted acceptance remains outstanding.
+
 ## Unreleased — experimental Smart Calendar integration
 
 - Add original/selected day timelines, mobile view switching, overlap/break feedback and exact-version task lock controls. Preserve unsaved edits when a changed work window requires regeneration.

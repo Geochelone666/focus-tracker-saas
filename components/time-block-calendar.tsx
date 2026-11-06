@@ -1,5 +1,6 @@
 'use client';
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react';
+import { startSession } from '@/app/dashboard/actions';
 import { useRouter } from 'next/navigation';
 import { saveTimeBlock, type BlockResult } from '@/app/calendar/block-actions';
 import { addDays, type Schedule } from '@/lib/planning';
@@ -31,7 +32,7 @@ function BlockEditor({task,tasks,date}:{task:Schedule;tasks:Schedule[];date:stri
   </fieldset>
  </form>;
 }
-export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:string;view:'day'|'week';zone:string}){
+export function TimeBlockCalendar({tasks,date,view,zone,executionRecovery=false}:{tasks:Schedule[];date:string;view:'day'|'week';zone:string;executionRecovery?:boolean}){
  const [ready,setReady]=useState(false);
  const [mobileDay,setMobileDay]=useState(date);
  useEffect(()=>setMobileDay(date),[date,view]);
@@ -65,6 +66,7 @@ export function TimeBlockCalendar({tasks,date,view,zone}:{tasks:Schedule[];date:
    {inbox.map(task=><button key={task.id} draggable={ready} onDragStart={event=>drag(event,task.id)} onClick={()=>setSelected(task.id)} className="max-w-full break-words rounded border px-3 py-2 text-sm">Inbox: {task.title}</button>)}
   </div>
   {result.error&&<p role="alert" className="my-2 text-red-800">{result.error}</p>}{result.success&&<p role="status" className="my-2">{result.success}</p>}{pending&&<p role="status">Saving block…</p>}
+  {executionRecovery&&chosen&&!chosen.is_done&&<form action={startSession} className="my-3"><input type="hidden" name="schedule_id" value={chosen.id}/><input type="hidden" name="skill_id" value={chosen.skill_id??''}/><SubmitButton label="Focus selected task" pendingLabel="Starting…"/></form>}
   {chosen&&<BlockEditor key={chosen.id} task={chosen} tasks={tasks} date={date}/>}
   <div className="mt-3 overflow-x-auto rounded border bg-white"><div className={view==='week'?'flex min-w-0 sm:min-w-[1120px]':'flex min-w-[280px]'}>
    <div className="w-12 shrink-0 pt-9" aria-hidden="true">{Array.from({length:24},(_,h)=><div key={h} className="h-12 text-xs text-slate-500">{String(h).padStart(2,'0')}:00</div>)}</div>

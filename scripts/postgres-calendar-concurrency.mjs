@@ -40,6 +40,7 @@ sql("insert into auth.users(id,email) values('"+owner+"','owner@ci.invalid'),('"
 sqlFile(resolve('supabase/tests/calendar_plan_ledger.sql'));
 sqlFile(resolve('supabase/tests/calendar_preview_snapshot.sql'));
 sqlFile(resolve('supabase/tests/calendar_task_lock_controls.sql'));
+sqlFile(resolve('supabase/tests/execution_recovery.sql'));
 console.log('PostgreSQL: version, confirm replay, RLS, undo and rollback regression passed');
 sql([
   'insert into public.schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values',

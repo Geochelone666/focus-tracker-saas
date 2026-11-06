@@ -22,6 +22,8 @@ The original MVP scope has expanded into the planning workflow described above. 
 
 Deployment acceptance still requires a matching Supabase project with migrations applied and live checks of authentication, ownership policies, and persistence. Passing unit tests or CI alone does not establish those deployment checks. See the deployment section below and [planning workflow](docs/planning-workflow.md).
 
+The experimental [execution recovery flow](docs/f2-execution-recovery.md) adds calendar-to-focus entry, unfinished-block review and saved resume context. It requires its additive migration and the default-off `FOCUS_EXECUTION_RECOVERY_ENABLED` server flag. [Focus 2 roadmap status](docs/f2-roadmap-status.md) tracks outstanding release gates.
+
 ## Local development
 
 Use Node.js 20.19 or newer (production uses Node.js 24) and npm.
