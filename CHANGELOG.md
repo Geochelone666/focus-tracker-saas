@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — account export pagination correction
+
+- Fix missing focus segments in account JSON downloads: numeric IDs were serialized as text and the page query sorted that text alias, while the cursor used numeric ordering.
+- Add `20261106030000_account_export_order.sql` to sort by the native key before serialization. Prior migration files and user records remain unchanged.
+- Add exact-ID regressions across digit-width and page boundaries, including IDs above JavaScript's safe integer limit. Existing downloads made with the old function should be regenerated after this migration.
+
 ## Unreleased — account data export
 
 - Add a Settings download for account JSON, covering tasks/Trash, projects, focus/break records, recovery context, reflections, calendar history and preferences; retain the existing CSV export.
