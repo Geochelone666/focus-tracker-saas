@@ -84,6 +84,14 @@ jobs:
       - name: Focus state end-to-end (local migrated database)
         run: node scripts/e2e-focus.mjs
 
+      - name: Upload F2-F02 calendar screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f2-f02-interaction-screenshots
+          path: test-artifacts/f2-f02-calendar-*.png
+          if-no-files-found: warn
+
       - name: Server log on failure
         if: failure()
         run: tail -100 server.log
