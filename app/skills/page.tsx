@@ -68,7 +68,7 @@ export default async function SkillsPage({
             minLength={1}
             maxLength={60}
             placeholder="e.g. TypeScript"
-            className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-hidden focus:ring-2 focus:ring-slate-200"
           />
           <button
             type="submit"
@@ -100,19 +100,19 @@ export default async function SkillsPage({
                     <button
                       type="submit"
                       aria-label={`${skill.is_done ? "Mark incomplete" : "Mark complete"}: ${skill.name}`}
-                      className="flex rounded p-1 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      className="flex rounded-sm p-1 transition hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-400"
                     >
                       <input
                         type="checkbox"
                         checked={skill.is_done}
                         readOnly
                         tabIndex={-1}
-                        className="pointer-events-none h-5 w-5 rounded border-slate-300 accent-slate-900"
+                        className="pointer-events-none h-5 w-5 rounded-sm border-slate-300 accent-slate-900"
                       />
                     </button>
                   </form>
                   <span
-                    className={`min-w-0 flex-1 break-words text-slate-800 ${
+                    className={`min-w-0 flex-1 wrap-break-word text-slate-800 ${
                       skill.is_done ? "text-slate-500 line-through" : ""
                     }`}
                   >

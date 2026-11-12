@@ -33,8 +33,8 @@ export function PlanForm({ plan, date = '', projects = [], skills = [], projectI
     <input type="hidden" name="series_revisions" value={baseline.seriesKey} />
     <input type="hidden" name="return_to" value={returnTo} />
     <input type="hidden" name="return_date" value={plan?.scheduled_date ?? date} />
-    {state.error && <p role="alert" className="rounded bg-red-50 p-3 text-red-800">{state.error}</p>}
-    {state.success && <p role="status" className="rounded bg-emerald-50 p-3 text-emerald-800">{state.success}</p>}
+    {state.error && <p role="alert" className="rounded-sm bg-red-50 p-3 text-red-800">{state.error}</p>}
+    {state.success && <p role="status" className="rounded-sm bg-emerald-50 p-3 text-emerald-800">{state.success}</p>}
     <label className="block text-sm">Title<input name="title" required maxLength={120} {...bind('title')} placeholder="What would you like to do?" className={fieldClass} /></label>
     <div className="grid grid-cols-2 gap-3">
       <label className="block text-sm">Date (optional)<input name="scheduled_date" type="date" min="0002-01-01" max="9998-12-31" {...bind('scheduled_date')} className={fieldClass} /></label>

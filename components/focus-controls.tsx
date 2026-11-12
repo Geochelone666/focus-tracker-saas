@@ -56,12 +56,12 @@ export function FocusControls({ session, skills = [], observedAt }: { session: F
     <FocusAlerts expired={expired} identity={`${session.id}:${session.focus_revision}`} />
     <form ref={form} action={action} className="flex min-w-0 flex-wrap items-center gap-3">
       <input type="hidden" name="session_id" value={session.id} /><input type="hidden" name="focus_revision" value={session.focus_revision} />
-      <label className="text-sm">Skill on completion<select name="skill_id" defaultValue={session.skill_id ?? ""} className="ml-2 max-w-full rounded border bg-white px-2 py-2"><option value="">Keep current skill</option>{skills.map(skill => <option key={skill.id} value={skill.id}>{skill.name}</option>)}</select></label>
-      <label className="w-full text-sm">Outcome / note (optional)<textarea name="note" maxLength={200} rows={2} className="mt-1 block w-full rounded border px-3 py-2" /></label>
-      <button disabled={pending || expired} name="focus_action" value={session.focus_status === 'paused' ? 'resume' : 'pause'} className="rounded border px-4 py-2 disabled:opacity-50">{session.focus_status === 'paused' ? `Resume ${label}` : `Pause ${label}`}</button>
-      <button ref={automatic} disabled={pending} name="focus_action" value="complete" className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{pending ? 'Saving…' : expired ? 'Save completed focus' : `Finish ${label}`}</button>
-      <button disabled={pending} name="focus_action" value="abandon" className="rounded border px-4 py-2 disabled:opacity-50">Abandon {label}</button>
-      {result.error && <p role="alert" className="w-full break-words text-red-800">{result.error} <button type="button" className="underline" onClick={() => router.refresh()}>Refresh session</button></p>}
+      <label className="text-sm">Skill on completion<select name="skill_id" defaultValue={session.skill_id ?? ""} className="ml-2 max-w-full rounded-sm border bg-white px-2 py-2"><option value="">Keep current skill</option>{skills.map(skill => <option key={skill.id} value={skill.id}>{skill.name}</option>)}</select></label>
+      <label className="w-full text-sm">Outcome / note (optional)<textarea name="note" maxLength={200} rows={2} className="mt-1 block w-full rounded-sm border px-3 py-2" /></label>
+      <button disabled={pending || expired} name="focus_action" value={session.focus_status === 'paused' ? 'resume' : 'pause'} className="rounded-sm border px-4 py-2 disabled:opacity-50">{session.focus_status === 'paused' ? `Resume ${label}` : `Pause ${label}`}</button>
+      <button ref={automatic} disabled={pending} name="focus_action" value="complete" className="rounded-sm bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{pending ? 'Saving…' : expired ? 'Save completed focus' : `Finish ${label}`}</button>
+      <button disabled={pending} name="focus_action" value="abandon" className="rounded-sm border px-4 py-2 disabled:opacity-50">Abandon {label}</button>
+      {result.error && <p role="alert" className="w-full wrap-break-word text-red-800">{result.error} <button type="button" className="underline" onClick={() => router.refresh()}>Refresh session</button></p>}
     </form>
     <p className="mt-2 text-xs text-slate-500">Finish records this phase. Break time never counts as focus. Abandon keeps a zero-credit record. Alerts are off until you enable them.</p>
   </div>;

@@ -95,7 +95,7 @@ export default async function DashboardPage({
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
       <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">Focus</h1>
-      <p className="mb-6 break-words text-slate-600">You are logged in as {user.email}.</p>
+      <p className="mb-6 wrap-break-word text-slate-600">You are logged in as {user.email}.</p>
 
       {error && (
         <div role="alert" className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
@@ -115,8 +115,8 @@ export default async function DashboardPage({
             <div className="mt-4 flex flex-wrap gap-3">
               {activeState === "none" && <form action={startSession} className="flex min-w-0 flex-wrap items-center gap-3">
                 <FocusOptions />
-                <label className="text-sm">Task (optional)<select name="schedule_id" defaultValue="" className="ml-2 max-w-full rounded border p-2"><option value="">No task</option>{taskChoices?.map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
-                <label className="text-sm">Project (optional)<select name="project_id" defaultValue="" className="ml-2 max-w-full rounded border p-2"><option value="">Use task project</option>{projects?.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+                <label className="text-sm">Task (optional)<select name="schedule_id" defaultValue="" className="ml-2 max-w-full rounded-sm border p-2"><option value="">No task</option>{taskChoices?.map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
+                <label className="text-sm">Project (optional)<select name="project_id" defaultValue="" className="ml-2 max-w-full rounded-sm border p-2"><option value="">Use task project</option>{projects?.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
                 <label htmlFor="start-skill" className="text-sm text-slate-700">Skill (optional)</label>
                 <select
                   id="start-skill"
