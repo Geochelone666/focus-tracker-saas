@@ -26,6 +26,8 @@ The experimental [execution recovery flow](docs/f2-execution-recovery.md) adds c
 
 Smart Calendar now requires [saved, versioned work hours](docs/f2-work-hours.md) before generating a real preview. See the [supplemental delivery plan](docs/focus2-next-plan.md) for prioritized work through private trials and public release.
 
+The experimental [account JSON export](docs/f2-account-export.md) downloads tasks, projects, focus history and preferences with owner-isolated, paginated streaming. It requires its additive migration and the default-off `FOCUS_DATA_EXPORT_ENABLED` flag. The existing focus CSV remains available.
+
 ## Local development
 
 Use Node.js 20.19 or newer (production uses Node.js 24) and npm.
