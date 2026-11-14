@@ -37,6 +37,7 @@ for(const f of readdirSync(dir).filter(x=>x.endsWith('.sql')).sort()){
   console.log('Migrated',f);
 }
 sql("insert into auth.users(id,email) values('"+owner+"','owner@ci.invalid'),('"+other+"','other@ci.invalid');");
+sqlFile(resolve('supabase/tests/time_blocks.sql'));
 sqlFile(resolve('supabase/tests/calendar_plan_ledger.sql'));
 sqlFile(resolve('supabase/tests/calendar_preview_snapshot.sql'));
 sqlFile(resolve('supabase/tests/calendar_task_lock_controls.sql'));
