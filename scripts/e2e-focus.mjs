@@ -456,8 +456,12 @@ try {
   assert.equal(afterRecovery.rows[0].estimated_minutes,60);assert.equal(afterRecovery.rows[0].remaining_minutes,30);
   console.log('PASS: recovery context / reload / stale edit preservation / calendar focus / pause / resume / finish without task completion');
   // Export multiple keyset pages through the real route and native browser download.
+  const exportSession='d6000000-0000-4000-8000-000000000001';
   await serial(async()=>{
     await db.query("insert into schedules(user_id,title) select $1,'Export task '||i from generate_series(1,105) i",[owner]);
+    await db.query("insert into focus_sessions(id,user_id,started_at,ended_at,duration_sec) values($1,$2,'2026-11-01T05:59:00Z','2026-11-01T06:00:00Z',60)",[exportSession,owner]);
+    await db.query("insert into focus_segments(id,session_id,user_id,started_at,ended_at,duration_ms) overriding system value select i,$1,$2,'2026-11-01T05:59:00Z','2026-11-01T06:00:00Z',60000 from generate_series(9999990,10000194) i",[exportSession,owner]);
+    await db.query("insert into focus_segments(id,session_id,user_id,started_at,ended_at,duration_ms) overriding system value values(9007199254740993,$1,$2,'2026-11-01T05:59:00Z','2026-11-01T06:00:00Z',60000)",[exportSession,owner]);
     await db.query("insert into integration_tokens(user_id,name,scope,token_hash,expires_at) values($1,'Export credential check','read',repeat('f',64),now()+interval '1 day')",[owner]);
   });
   await a.goto(base+'/settings');
@@ -482,11 +486,15 @@ try {
   assert.equal(new Set(account.data.tasks.map(task=>task.id)).size,ownedTasks,'Export must not repeat tasks at page boundaries');
   assert.equal(account.data.tasks.find(task=>task.id===recoveryId).resume_note,'Resume at the SQL regression checks');
   assert.ok(account.data.focus_sessions.some(session=>session.session_kind==='short_break'));
+  const expectedSegments=(await serial(()=>db.query('select id::text as segment_id from focus_segments where user_id=$1 order by id',[owner]))).rows.map(row=>row.segment_id);
+  assert.deepEqual(account.data.focus_segments.map(segment=>segment.id),expectedSegments,'Downloaded segment IDs must exactly match database numeric order without omissions or duplicates');
+  assert.equal(account.counts.focus_segments,expectedSegments.length);
+  assert.equal(account.data.focus_segments.at(-1).id,'9007199254740993');
   assert.ok(account.data.ai_connections.some(connection=>connection.name==='Export credential check'));
   assert.ok(!accountText.includes('token_hash')&&!accountText.includes('f'.repeat(64)),'Export must omit credential hashes');
   assert.ok(account.data.work_preferences.length===1,'Saved work hours must be portable');
   assert.equal((await first.request.get(base+'/history/export')).status(),200,'Existing CSV must still work');
-  console.log('PASS: native account JSON download / paginated tasks / recovery and work preferences / credential exclusion / 390px layout');
+  console.log('PASS: native account JSON download / paginated tasks and exact numeric segment IDs / recovery and work preferences / credential exclusion / 390px layout');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}

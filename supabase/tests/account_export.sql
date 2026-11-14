@@ -44,6 +44,43 @@ do $$ declare first_page jsonb; next_page jsonb; name text; result jsonb; begin
  if jsonb_array_length(public.account_export_page('tasks')->'rows')<>1 or jsonb_array_length(public.account_export_page('ai_connections')->'rows')<>0 then raise exception 'Other owner isolation failed'; end if;
 end $$;
 reset role;
+-- Exercise real keyset pages across a digit-width boundary, plus the bigint
+-- above JavaScript's safe range already inserted above. Text ORDER BY id would
+-- start at 10000000, advance the numeric cursor, and silently omit 9999990..9999999.
+insert into focus_segments(id,session_id,user_id,started_at,ended_at,duration_ms) overriding system value
+ select i,'c6000000-0000-4000-8000-000000000007','c6000000-0000-4000-8000-000000000001',
+  '2026-11-01T05:59:00.123456Z'::timestamptz,'2026-11-01T06:00:00.123456Z'::timestamptz,60000
+ from generate_series(9999990,10000194) i;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c6000000-0000-4000-8000-000000000001',true);
+do $$ declare page_size integer; cursor_value text; page jsonb; item jsonb;
+ expected_ids text[]; exported_ids text[]; previous_id bigint; page_count integer;
+begin
+ select array_agg(id::text order by id) into expected_ids from public.focus_segments where user_id=auth.uid();
+ if cardinality(expected_ids)<>206 then raise exception 'Segment pagination fixture incomplete'; end if;
+ foreach page_size in array array[100,7] loop
+  cursor_value:=null; exported_ids:=array[]::text[]; previous_id:=0; page_count:=0;
+  loop
+   page:=public.account_export_page('focus_segments',cursor_value,page_size);
+   page_count:=page_count+1;
+   if page_count>100 then raise exception 'Segment export cursor did not terminate'; end if;
+   for item in select value from jsonb_array_elements(page->'rows') loop
+    if jsonb_typeof(item->'id')<>'string' or (item->>'id')::bigint<=previous_id then
+     raise exception 'Segment IDs lost exact string encoding or numeric ordering'; end if;
+    exported_ids:=array_append(exported_ids,item->>'id');
+    previous_id:=(item->>'id')::bigint;
+   end loop;
+   cursor_value:=page->>'next_cursor';
+   exit when cursor_value is null;
+  end loop;
+  if exported_ids is distinct from expected_ids then
+   raise exception 'Focus segment export omitted or duplicated rows: % of % at page size %',
+    cardinality(exported_ids),cardinality(expected_ids),page_size;
+  end if;
+  if previous_id<>9007199254740993 then raise exception 'Large final segment ID lost precision'; end if;
+ end loop;
+end $$;
+reset role;
 do $$ begin
  if has_function_privilege('anon','public.account_export_page(text,text,integer)','execute') then raise exception 'Anonymous export granted'; end if;
 end $$;

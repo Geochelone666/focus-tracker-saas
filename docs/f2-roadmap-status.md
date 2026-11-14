@@ -1,4 +1,4 @@
-# Focus 2 roadmap status — 2026-11-06
+# Focus 2 roadmap status — 2026-11-11
 
 The supplied roadmap is staged by acceptance evidence. This is a status ledger,
 not a claim that implementation or synthetic tests complete the whole roadmap.
@@ -80,3 +80,10 @@ Recovery-to-rescheduling still needs separate task-estimate and future-block-len
 semantics: using `remaining_minutes` to overwrite the existing `estimated_minutes`
 would change the planned-vs-actual baseline. That model change has not been hidden
 inside this export work or claimed as complete.
+
+Export review found numeric segment pagination could omit records after IDs were
+cast to text. The additive correction on `fix/f2-export-segment-pagination`
+(migration 37) restores native ordering. The regression demonstrates 196/206
+records with the old function and all 206 after correction, across page sizes
+100 and 7. Existing old-function exports should be regenerated. Hosted acceptance
+and the rest of the roadmap remain outstanding.

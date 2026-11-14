@@ -73,6 +73,26 @@ non-cacheable JSON attachments with `nosniff`.
 
 ## Deployment and rollback
 
+**Pagination correction (2026-11-11):** apply
+`20261106030000_account_export_order.sql` after the original export migration
+before enabling account downloads. This brings the local migration count to 37.
+The original function sorted `focus_segments.id` by its serialized text alias
+while using a numeric cursor; multi-page exports could omit records and still
+contain `complete: true`. That marker indicates the stream finished, not that
+the old pagination implementation was correct. Regenerate any affected prior
+downloads after applying the fix. The correction sorts by the native `_sort`
+key and preserves decimal-string IDs in the file. It replaces only the RPC,
+retains existing permissions and does not modify user records. Keep this fix
+when rolling back application changes; do not restore the faulty RPC.
+
+Correction verified locally on 2026-11-11: the old function returns only 196 of
+206 fixture IDs; the same regression passes after the fix with page sizes 100
+and 7. The full 583-test suite, typecheck, lint, build and PostgreSQL 17 runner
+passed with all 37 migrations. Chromium downloaded the actual JSON and matched
+every segment ID against database numeric order, including an ID above
+JavaScript's safe integer range. Existing daily/Smart Calendar/recovery workflows
+also passed. This does not verify a hosted deployment.
+
 Apply `20261106020000_account_export.sql` after existing migrations (36 local
 files), once hosted registry/schema reconciliation has been completed. It adds
 one read-only RPC and owner/key indexes; no user records are rewritten. Large
