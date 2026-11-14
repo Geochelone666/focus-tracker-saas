@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export default async function GettingStarted({
   searchParams,
 }: {
-  searchParams: Promise<{ task?: string }>;
+  searchParams: Promise<{ task?: string | string[] }>;
 }) {
   const { supabase, user, zone, today } = await planningContext();
   const params = await searchParams;
@@ -17,7 +17,7 @@ export default async function GettingStarted({
     guide = await readGettingStarted(
       supabase,
       user.id,
-      typeof params.task === 'string' ? params.task : undefined
+      Array.isArray(params.task) ? '' : params.task
     );
   } catch {
     return (

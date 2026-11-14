@@ -15,7 +15,7 @@ export async function readGettingStarted(
   owner: string,
   requested?: string
 ) {
-  if (requested) validateId(requested);
+  const taskId = requested === undefined ? undefined : validateId(requested);
   const [recent, active] = await Promise.all([
     client
       .from('schedules')
@@ -35,12 +35,12 @@ export async function readGettingStarted(
   if (recent.error || active.error) throw new Error('Guide unavailable');
   const tasks = (recent.data ?? []) as GuideTask[];
   let task: GuideTask | null = tasks[0] ?? null;
-  if (requested) {
+  if (taskId) {
     const selected = await client
       .from('schedules')
       .select(columns)
       .eq('user_id', owner)
-      .eq('id', requested)
+      .eq('id', taskId)
       .is('deleted_at', null)
       .maybeSingle();
     if (selected.error) throw new Error('Guide unavailable');

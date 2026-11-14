@@ -57,6 +57,7 @@ it('does not substitute a different task for an unavailable or foreign ID', asyn
 it('fails on invalid IDs or read errors instead of inventing progress', async () => {
   const f = fixture([{ error: { message: 'private detail' } }, { data: null }]);
   await expect(readGettingStarted(f.client, 'owner', 'bad')).rejects.toThrow();
+  await expect(readGettingStarted(f.client, 'owner', '')).rejects.toThrow();
   expect(f.from).not.toHaveBeenCalled();
   await expect(readGettingStarted(f.client, 'owner')).rejects.toThrow('Guide unavailable');
 });
