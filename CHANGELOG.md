@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — persisted Smart Calendar work hours
+
+- Save work hours across devices with owner-scoped revision checks; preserve stale-device edits and require regeneration after a work-window change.
+- Carry canonical preview metadata into drafts and validate saved hours/revisions at staging and confirmation; roll back stale confirmations atomically while preserving successful request replay and undo.
+- Requires additive `20261106010000_calendar_work_preferences.sql`; the Smart Calendar flag remains off. See [deployment, legacy behavior and rollback](docs/f2-work-hours.md).
+- Add a user-requested [supplemental delivery plan](docs/focus2-next-plan.md) covering remaining safety gates, execution feedback, onboarding, privacy, mobile acceptance, trials and public release.
+
 ## Unreleased — experimental execution recovery
 
 - Start task-linked focus from the calendar; review open time blocks and recently focused Inbox tasks in the account timezone.

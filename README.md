@@ -24,6 +24,8 @@ Deployment acceptance still requires a matching Supabase project with migrations
 
 The experimental [execution recovery flow](docs/f2-execution-recovery.md) adds calendar-to-focus entry, unfinished-block review and saved resume context. It requires its additive migration and the default-off `FOCUS_EXECUTION_RECOVERY_ENABLED` server flag. [Focus 2 roadmap status](docs/f2-roadmap-status.md) tracks outstanding release gates.
 
+Smart Calendar now requires [saved, versioned work hours](docs/f2-work-hours.md) before generating a real preview. See the [supplemental delivery plan](docs/focus2-next-plan.md) for prioritized work through private trials and public release.
+
 ## Local development
 
 Use Node.js 20.19 or newer (production uses Node.js 24) and npm.
