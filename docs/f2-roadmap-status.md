@@ -1,4 +1,4 @@
-# Focus 2 roadmap status — 2026-11-05
+# Focus 2 roadmap status — 2026-11-06
 
 The supplied roadmap is staged by acceptance evidence. This is a status ledger,
 not a claim that implementation or synthetic tests complete the whole roadmap.
@@ -8,7 +8,7 @@ The attachment ends midway through Phase 6, after its mobile bullet.
 |---|---|---|
 | 0: safety/integration | Integrated code, 567 unit/action tests, migrated SQL, real PostgreSQL connection races, fixture browser workflow, offline preflight | Exact-head GitHub CI/Preview, complete hosted registry/schema evidence, two real GoTrue identities, independent contract/security/design agreement |
 | 1: usable Smart Calendar | Experimental real-data preview, selection/edit/confirm/reload/undo, day comparison and versioned locks; default flag off | Resolve protocol and authority gaps below, independent acceptance and hosted end-to-end verification |
-| 2: execution/plan feedback | V1 focus/task/project association, pause/resume, saved outcomes and actual-time accounting are reusable | Calendar execution entry and unfinished/interrupted block recovery, remaining-time planning and genuine user-journey acceptance; not declared delivered |
+| 2: execution/plan feedback | Experimental calendar execution entry, unfinished/interrupted block review, saved remaining estimate/resume context, CAS edits, pagination and mobile browser workflow on `feat/f2-execution-recovery`; reuses V1 focus accounting | Automatic remaining-day suggestions, integration of remaining estimates into planning, and genuine user-journey acceptance; not release-accepted |
 | 3: personalization | Pure historical estimator/evaluation helpers and synthetic benchmarks exist | Authorized sufficient real pilot data, repeatable improvement over baseline; no production personalization enabled |
 | 4: external integrations | No Google/Outlook calendar connection delivered | OAuth application configuration, authorized test calendars, owner-isolated read-only sync/revocation testing; writeback remains separately opt-in |
 | 5: advanced planning/AI | Baseline deterministic scheduling and existing scoped AI/MCP entrypoints | Evidence-driven splitting/dependencies/capacity work after stable earlier stages; optional AI must not become a hard dependency |
@@ -59,3 +59,9 @@ session. No PR or CI outcome can be fabricated from the public issue pages.
 Do not enable the experimental feature or declare all phases complete to bypass
 these acceptance gates. Continue from this ledger when the required access,
 contract decisions and real evaluation inputs are available.
+
+The independent [execution recovery increment](f2-execution-recovery.md) is stacked
+on that integration branch and kept behind its own default-off flag. Its additive
+migration is file 34; the earlier 33-file worksheet intentionally describes the
+Phase 0 integration snapshot, not the newer Phase 2 branch. The new local tests
+provide implementation evidence, not a substitute for the remaining gates above.

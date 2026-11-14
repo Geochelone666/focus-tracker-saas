@@ -48,6 +48,8 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/task_recovery_snapshot') return (await db.query('select public.task_recovery_snapshot($1,$2,$3) as value',[body.p_from,body.p_to,body.p_offset??0])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/save_task_recovery') return (await db.query('select public.save_task_recovery($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_remaining,body.p_note])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/set_calendar_task_lock') return (await db.query('select public.set_calendar_task_lock($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_expected_lock,body.p_locked])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/calendar_preview_snapshot') return (await db.query('select public.calendar_preview_snapshot() as value')).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/stage_calendar_preview') return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone])).rows[0].value;
@@ -97,7 +99,7 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(fixturePort,'127.0.0.1',resolve));
 let logs='';
-const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',FOCUS_EXECUTION_RECOVERY_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
 app.stdout.on('data',chunk=>{logs+=chunk;});app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 const rows=()=>serial(async()=>(await db.query('select * from public.focus_sessions order by created_at,id')).rows);
@@ -378,6 +380,42 @@ try {
   assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
     [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
   console.log('PASS: real Smart Calendar generate / select / manual edit / confirm / reload / undo / stale-device rejection at 390px');
+  const recoveryId='88888888-8888-4888-8888-888888888888';
+  const recoveryDay=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto'}).format(new Date());
+  await serial(()=>db.query("insert into schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values($1,$2,'Recovery workflow task',$3,'09:00',60)",[recoveryId,owner,recoveryDay]));
+  await a.goto(base+'/calendar/recovery');
+  const recoveryCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Recovery workflow task',exact:true})});
+  await recoveryCard.getByLabel('Your remaining estimate (minutes)').fill('30');
+  await recoveryCard.getByLabel('Where to pick up next').fill('Resume at the SQL regression checks');
+  await recoveryCard.getByRole('button',{name:'Save recovery context',exact:true}).click();
+  await recoveryCard.getByText('Recovery context saved. Task times and focus records are unchanged.',{exact:true}).waitFor();
+  await a.reload();
+  assert.equal(await recoveryCard.getByLabel('Your remaining estimate (minutes)').inputValue(),'30');
+  assert.equal(await recoveryCard.getByLabel('Where to pick up next').inputValue(),'Resume at the SQL regression checks');
+  await recoveryCard.getByLabel('Where to pick up next').fill('Keep this unsaved recovery context');
+  await serial(()=>db.query("update schedules set priority='high' where id=$1",[recoveryId]));
+  await recoveryCard.getByRole('button',{name:'Save recovery context',exact:true}).click();
+  await recoveryCard.getByRole('alert').filter({hasText:'changed on another device'}).waitFor();
+  assert.equal(await recoveryCard.getByLabel('Where to pick up next').inputValue(),'Keep this unsaved recovery context');
+  assert.deepEqual((await serial(()=>db.query('select estimated_minutes,remaining_minutes,resume_note,is_done from schedules where id=$1',[recoveryId]))).rows,
+    [{estimated_minutes:60,remaining_minutes:30,resume_note:'Resume at the SQL regression checks',is_done:false}]);
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Recovery page overflow at 390px');
+  await a.screenshot({path:'test-artifacts/f2-f02-recovery-mobile.png',fullPage:true});
+  await a.goto(base+'/calendar?view=day&date='+recoveryDay);
+  await a.getByLabel('Arrange task',{exact:true}).selectOption(recoveryId);
+  await a.getByRole('button',{name:'Focus selected task',exact:true}).click();
+  await waitFor(async()=>(await rows()).some(s=>s.schedule_id===recoveryId&&s.ended_at===null),'Calendar focus must preserve task association');
+  await a.getByRole('button',{name:'Pause focus',exact:true}).click();
+  await a.goto(base+'/calendar/recovery');
+  await recoveryCard.getByText('Focus is paused',{exact:true}).waitFor();
+  await recoveryCard.getByRole('link',{name:'Return to active session',exact:true}).click();
+  await a.getByRole('button',{name:'Resume focus',exact:true}).click();
+  await a.getByRole('button',{name:'Finish focus',exact:true}).click();
+  await waitFor(async()=>(await rows()).some(s=>s.schedule_id===recoveryId&&s.focus_status==='completed'),'Recovery focus must complete');
+  const afterRecovery=await serial(()=>db.query('select is_done,estimated_minutes,remaining_minutes,resume_note from schedules where id=$1',[recoveryId]));
+  assert.equal(afterRecovery.rows[0].is_done,false,'Finishing focus must not complete task');
+  assert.equal(afterRecovery.rows[0].estimated_minutes,60);assert.equal(afterRecovery.rows[0].remaining_minutes,30);
+  console.log('PASS: recovery context / reload / stale edit preservation / calendar focus / pause / resume / finish without task completion');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}
