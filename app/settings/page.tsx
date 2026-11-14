@@ -8,11 +8,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { zone } = await planningContext();
   return <main className="mx-auto max-w-2xl px-4 py-10">
     <h1 className="text-3xl font-bold">Settings</h1>
+    <p className="mt-4"><Link href="/getting-started" className="underline">Open the focus workflow guide</Link></p>
     {process.env.FOCUS_DATA_EXPORT_ENABLED === 'true' && <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Your data</h2><p className="mb-3 text-sm">Download your tasks, focus records and preferences for your own records.</p><Link href="/settings/data" className="underline">Download your data</Link></section>}
     <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Devices and AI</h2><p className="mb-3 text-sm">Sign in with the same account on your phone and computer. Visible pages check for updates every 30 seconds and when you return. Automatic refresh pauses while you have unsaved form input; reload or navigate after saving to resume.</p><Link href="/settings/integrations" prefetch={false} className="underline">Manage AI connections</Link><p className="mt-3"><Link href="/settings/notifications" prefetch={false} className="underline">Manage phone reminders</Link></p></section>
     {typeof params.error === 'string' && <p role="alert" className="mt-4 text-red-800">{params.error}</p>}
     {params.saved === '1' && <p role="status" className="mt-4 text-emerald-800">Timezone saved.</p>}
-    <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Your timezone</h2>
+    <section id="timezone" className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Your timezone</h2>
       <p className="mb-3 text-sm text-slate-600">Used for Today, reminders, session times and daily statistics. Calendar dates stay exactly as entered.</p>
       <form action={saveTimezone} className="space-y-3"><label className="block text-sm">IANA timezone<input name="timezone" required maxLength={100} defaultValue={zone} list="timezones" className="mt-1 w-full rounded border px-3 py-2" /></label>
         <datalist id="timezones">{['America/Toronto','America/New_York','America/Los_Angeles','Europe/London','Europe/Paris','Asia/Shanghai','Asia/Tokyo','Asia/Singapore','Australia/Sydney','UTC'].map(value=><option key={value} value={value} />)}</datalist>

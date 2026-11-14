@@ -8,7 +8,7 @@ import { PlanForm } from '@/components/plan-form';
 import { sortPlans } from '@/lib/planning';
 import { PlanCard } from '@/components/plan-card';
 
-export default async function CalendarPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ date?: string; month?: string; view?: string; error?: string; status?: string }> }) {
+export default async function CalendarPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ date?: string; month?: string; view?: string; error?: string; status?: string; task?:string; guide?:string }> }) {
   const searchParams = await searchParamsPromise;
   const context = await planningContext();
   const { today, zone } = context;
@@ -29,10 +29,15 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
   const schedules = allSchedules.filter(item => !item.deleted_at && item.scheduled_date && calendar.days.includes(item.scheduled_date));
   const daySchedules = sortPlans(schedules.filter(item => item.scheduled_date === selected));
   const selectedSchedules = daySchedules.filter(item => status === 'all' || item.is_done === (status === 'completed'));
+  const guideTask = searchParams.guide === '1'
+    ? allSchedules.find(task => task.id === searchParams.task && !task.deleted_at)
+    : undefined;
+  const guideQuery = guideTask ? `&task=${guideTask.id}&guide=1` : '';
   const dateHref = (date: string) => `?date=${date}&status=${status}&view=day`;
-  const navigate = (date:string) => `?date=${date}&view=${view}&status=${status}`;
+  const navigate = (date:string) => `?date=${date}&view=${view}&status=${status}${guideQuery}`;
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 text-slate-900">
+      {guideTask&&<Link href={`/getting-started?task=${guideTask.id}`} className="mb-4 block underline">Return to your focus guide</Link>}
       <h1 className="text-3xl font-bold">Schedules & Calendar</h1>
       <p className="mt-2 mb-6 text-slate-600">Plan your day and check off your progress. Time and notes are optional.</p>
       {process.env.FOCUS_SMART_CALENDAR_ENABLED==='true'&&<p className="mb-4"><Link href="/calendar/smart-plan" className="underline">Plan your time (experimental)</Link></p>}
@@ -47,7 +52,7 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
         <Link prefetch={false} href={navigate(today)} className="underline">Today</Link>
         <Link prefetch={false} href={navigate(addDays(selected,view==='week'?7:1))} className="rounded border px-3 py-2">Next {view}</Link>
       </nav>}
-      {view!=='month'&&<TimeBlockCalendar tasks={allSchedules} date={selected} view={view} zone={zone} executionRecovery={process.env.FOCUS_EXECUTION_RECOVERY_ENABLED==='true'}/>}
+      {view!=='month'&&<TimeBlockCalendar tasks={allSchedules} date={selected} view={view} zone={zone} initialTask={guideTask?.id} executionRecovery={process.env.FOCUS_EXECUTION_RECOVERY_ENABLED==='true'}/>}
       {view==='month'&&<div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <section className="min-w-0 rounded-lg border bg-white p-3 sm:p-5" aria-label="Monthly calendar">
           <nav className="mb-5 flex items-center justify-between gap-2" aria-label="Change month">

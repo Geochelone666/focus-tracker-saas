@@ -32,12 +32,12 @@ function BlockEditor({task,tasks,date}:{task:Schedule;tasks:Schedule[];date:stri
   </fieldset>
  </form>;
 }
-export function TimeBlockCalendar({tasks,date,view,zone,executionRecovery=false}:{tasks:Schedule[];date:string;view:'day'|'week';zone:string;executionRecovery?:boolean}){
+export function TimeBlockCalendar({tasks,date,view,zone,executionRecovery=false,initialTask=''}:{initialTask?:string;tasks:Schedule[];date:string;view:'day'|'week';zone:string;executionRecovery?:boolean}){
  const [ready,setReady]=useState(false);
  const [mobileDay,setMobileDay]=useState(date);
  useEffect(()=>setMobileDay(date),[date,view]);
  useEffect(()=>setReady(true),[]);
- const router=useRouter(),[selected,setSelected]=useState(''),[result,setResult]=useState<BlockResult>({}),[pending,startTransition]=useTransition();
+ const router=useRouter(),[selected,setSelected]=useState(tasks.some(task=>task.id===initialTask&&!task.deleted_at&&!task.is_done)?initialTask:''),[result,setResult]=useState<BlockResult>({}),[pending,startTransition]=useTransition();
  const offset=(new Date(`${date}T12:00:00Z`).getUTCDay()+6)%7;
  const dates=Array.from({length:view==='week'?7:1},(_,i)=>addDays(date,view==='week'?i-offset:0));
  const live=tasks.filter(task=>!task.deleted_at),inbox=live.filter(task=>!task.scheduled_date&&!task.is_done);
