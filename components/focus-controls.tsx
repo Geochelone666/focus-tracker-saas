@@ -48,6 +48,7 @@ export function FocusControls({ session, skills = [], observedAt }: { session: F
     window.addEventListener('online', refresh);
     return () => { clearInterval(timer);document.removeEventListener('input',dirty);document.removeEventListener('change',dirty); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
   }, [router]);
+  useEffect(() => { if (result.saved) router.refresh(); }, [result.saved, router]);
   return <div className="min-w-0">
     <p className="mt-3 font-semibold">{label === "break" ? session.session_kind === "long_break" ? "Long break" : "Short break" : "Focus"} · round {session.cycle_number ?? 1} of {session.cycle_count ?? 1}</p>
     <p className="mt-3 text-sm">{session.focus_status === 'paused' ? 'Paused · paused time is excluded' : expired ? 'Countdown finished' : session.focus_mode === 'countdown' ? 'Time remaining' : 'Focused time'}</p>

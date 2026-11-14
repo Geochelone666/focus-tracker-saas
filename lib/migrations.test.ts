@@ -52,7 +52,8 @@ async function asUser<T>(user: string, fn: () => Promise<T>) {
   }
 }
 
-describe("supabase migrations", () => {
+// Each case builds and migrates a fresh database; keep the larger budget scoped to this suite.
+describe("supabase migrations", { timeout: 60_000 }, () => {
   it("has unique migration versions for Supabase CLI restoration",async()=>{
     const files=await migrationFiles(),versions=files.map(file=>file.split('_')[0]);
     expect(new Set(versions).size).toBe(versions.length);
@@ -62,9 +63,9 @@ describe("supabase migrations", () => {
     for (const file of (await readdir(sqlTestsDir)).filter((f) => f.endsWith(".sql")).sort()) {
       await expect(db.exec(await readFile(path.join(sqlTestsDir, file), "utf8")), file).resolves.toBeDefined();
     }
-  });
+  }, 60_000);
 
-  it("can rerun the mobile notification migration",async()=>{db=await freshDatabase();await expect(db.exec(await readFile(path.join(migrationsDir,"20261023010000_mobile_push.sql"),"utf8"))).resolves.toBeDefined();});
+  it("can rerun the mobile notification migration",async()=>{db=await freshDatabase();await expect(db.exec(await readFile(path.join(migrationsDir,"20261023010000_mobile_push.sql"),"utf8"))).resolves.toBeDefined();}, 60_000);
 
   it("keeps one covering schedule owner/date index after Focus V1",async()=>{
     db=await freshDatabase();
