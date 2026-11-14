@@ -63,7 +63,8 @@ jobs:
 
   e2e:
     needs: ci
-    runs-on: ubuntu-latest
+    # Playwright 1.55 cannot install Chromium dependencies on Ubuntu 26.04.
+    runs-on: ubuntu-24.04
     env:
       # Unreachable on purpose: the auth-guard check needs no real project.
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
