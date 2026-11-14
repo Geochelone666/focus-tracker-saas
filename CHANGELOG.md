@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — guided first focus workflow
+
+- Add a skippable guide from Settings and Today for checking timezone, capturing a task, scheduling, focusing and reviewing recorded time. The guide also opens from a specific task.
+- Reuse existing task creation, calendar editing, session transitions and focus totals.
+
 ## Unreleased — account export pagination correction
 
 - Fix missing focus segments in account JSON downloads: numeric IDs were serialized as text and the page query sorted that text alias, while the cursor used numeric ordering.

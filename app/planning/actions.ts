@@ -13,7 +13,7 @@ export type PlanState = { error?: string; success?: string; savedAt?: number };
 function refresh(path = '/today') { revalidatePath(path); }
 function destination(form: FormData) {
   const value = form.get('return_to');
-  return typeof value === 'string' && ['/today','/inbox','/calendar','/projects','/review'].includes(value) ? value : '/today';
+  return typeof value === 'string' && ['/today','/inbox','/calendar','/projects','/review','/getting-started'].includes(value) ? value : '/today';
 }
 function failure(path: string, message: string): never { redirect(path + '?error=' + encodeURIComponent(message)); }
 
@@ -27,12 +27,15 @@ export async function createPlan(_state: PlanState, form: FormData): Promise<Pla
   const { supabase, user, zone } = await planningContext();
   if (plan.scheduled_time && dates.some(date=>date && wallTimeInstants(date,plan.scheduled_time!,zone).length===0)) return { error: "A local time does not exist on one of these dates because clocks change. Choose another time." };
   const series = dates.length > 1 ? randomUUID() : null;
+  const returnTo = destination(form);
+  const guideTaskId = returnTo === '/getting-started' && dates.length === 1 ? randomUUID() : null;
   try {
-    const { error } = await supabase.from('schedules').insert(dates.map(date => ({ ...plan, scheduled_date: date, series_id: series, user_id: user.id })));
+    const { error } = await supabase.from('schedules').insert(dates.map(date => ({ ...plan, scheduled_date: date, series_id: series, user_id: user.id, ...(guideTaskId ? { id: guideTaskId } : {}) })));
     if (error) return { error: 'Could not save. Please check your project/skill selection and try again.' };
   } catch { return { error: 'Could not connect. Your input has been kept; please try again.' }; }
-  refresh(destination(form));
-  if (destination(form) === '/calendar' && plan.scheduled_date !== form.get('return_date')) redirect(plan.scheduled_date ? '/calendar?date=' + plan.scheduled_date : '/inbox');
+  refresh(returnTo);
+  if (guideTaskId) redirect('/getting-started?task=' + guideTaskId);
+  if (returnTo === '/calendar' && plan.scheduled_date !== form.get('return_date')) redirect(plan.scheduled_date ? '/calendar?date=' + plan.scheduled_date : '/inbox');
   return { success: dates.length > 1 ? `Created ${dates.length} occurrences. Each can be completed separately.` : 'Saved. Your plan is ready.', savedAt: Date.now() };
 }
 

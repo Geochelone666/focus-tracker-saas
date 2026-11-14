@@ -24,6 +24,13 @@ describe('planning actions',()=>{
     expect(rows.map((r:{scheduled_date:string})=>r.scheduled_date)).toEqual(['2026-10-20','2026-10-27','2026-11-03']);
     expect(rows.every((r:{user_id:string;series_id:string})=>r.user_id==='owner'&&r.series_id===rows[0].series_id)).toBe(true);
   });
+  it('returns the exact server-created task to the guide without accepting a client ID',async()=>{
+    await expect(createPlan({},form({return_to:'/getting-started',estimated_minutes:'25',id}))).rejects.toThrow('Redirect: /getting-started?task=');
+    const created=mocks.insert.mock.calls[0][0][0];
+    expect(created.user_id).toBe('owner');expect(created.id).toMatch(/^[a-f0-9-]{36}$/);expect(created.id).not.toBe(id);
+    expect(created.estimated_minutes).toBe(25);expect(created.scheduled_date).toBeNull();
+    expect(mocks.revalidate).toHaveBeenCalledWith('/getting-started');
+  });
   it('returns a recoverable error without clearing input on failed saves',async()=>{
     mocks.insert.mockResolvedValue({error:{message:'denied'}});
     expect(await createPlan({},form())).toHaveProperty('error');expect(mocks.revalidate).not.toHaveBeenCalled();

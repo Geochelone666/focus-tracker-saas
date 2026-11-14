@@ -14,7 +14,7 @@ trial, privacy, mobile and public-release work; it is separate from the source.
 | 3: personalization | Pure historical estimator/evaluation helpers and synthetic benchmarks exist | Authorized sufficient real pilot data, repeatable improvement over baseline; no production personalization enabled |
 | 4: external integrations | No Google/Outlook calendar connection delivered | OAuth application configuration, authorized test calendars, owner-isolated read-only sync/revocation testing; writeback remains separately opt-in |
 | 5: advanced planning/AI | Baseline deterministic scheduling and existing scoped AI/MCP entrypoints | Evidence-driven splitting/dependencies/capacity work after stable earlier stages; optional AI must not become a hard dependency |
-| 6: maturity | Existing web/mobile foundation and CSV; experimental paginated account JSON export with fixed projections and explicit read consistency; supplemental plan defines trial/public-release acceptance | Hosted export acceptance, guided onboarding, account deletion/privacy, operational recovery and real-device acceptance; not delivered |
+| 6: maturity | Existing web/mobile foundation and CSV; experimental paginated account JSON export with fixed projections and explicit read consistency; first workflow guide implemented | Hosted export and onboarding acceptance, account deletion/privacy, operational recovery and real-device acceptance; not delivered |
 
 ## Fresh source inspection
 
@@ -53,7 +53,7 @@ matches at inspection. This does not mean their SQL effects are absent. The
 keeps unknown mappings blocked. A complete sanitized registry and schema-only
 snapshot is needed before a reviewed disposable reconciliation rehearsal.
 
-## Delivery blocker
+## Initial delivery blocker
 
 The remote integration branch is preserved. GitHub API creation/read requests
 remain Forbidden at the proxy; Git transport and public HTML reads work. Supabase
@@ -87,3 +87,9 @@ cast to text. The additive correction on `fix/f2-export-segment-pagination`
 records with the old function and all 206 after correction, across page sizes
 100 and 7. Existing old-function exports should be regenerated. Hosted acceptance
 and the rest of the roadmap remain outstanding.
+
+The [first workflow guide](f2-first-workflow.md) is stacked on the export
+pagination correction. It reuses existing task and focus data and adds no migration.
+GitHub API access was restored on 2026-11-14 and stack review began in PRs
+[#80 through #84](https://github.com/Geochelone666/focus-tracker-saas/pull/80).
+Hosted migration reconciliation and independent release acceptance remain open.
