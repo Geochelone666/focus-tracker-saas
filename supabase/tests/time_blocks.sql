@@ -4,9 +4,14 @@ select set_config('test.other',(select id::text from auth.users order by id offs
 set local role authenticated;
 select set_config('request.jwt.claim.sub',current_setting('test.owner'),true);
 do $$ declare s public.schedules; future public.schedules; done public.schedules; revisions jsonb; before_stamp timestamptz; begin
- insert into public.schedules(user_id,title,deadline,series_id,scheduled_date) values(auth.uid(),'Calendar QA','2026-10-31',gen_random_uuid(),'2026-10-24') returning * into s;
+ -- Force the new clock reading behind the stored revision without timing sleeps.
+ insert into public.schedules(user_id,title,deadline,series_id,scheduled_date,updated_at)
+ values(auth.uid(),'Calendar QA','2026-10-31',gen_random_uuid(),'2026-10-24',clock_timestamp() + interval '1 day')
+ returning * into s;
+ before_stamp:=s.updated_at;
  perform public.mutate_schedule(s.id,s.updated_at,'{"scheduled_time":"14:00","estimated_minutes":90}');
  select * into s from public.schedules where id=s.id;
+ if s.updated_at<=before_stamp then raise exception 'Task revision did not advance'; end if;
  if s.scheduled_time<>time '14:00' or s.estimated_minutes<>90 or s.deadline<>date '2026-10-31' then raise exception 'Block or deadline incorrect'; end if;
  before_stamp:=s.updated_at;
  perform public.mutate_schedule(s.id,s.updated_at,'{"estimated_minutes":60}');
