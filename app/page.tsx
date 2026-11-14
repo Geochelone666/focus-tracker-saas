@@ -1,6 +1,12 @@
 import Link from "next/link";
+import { createClient } from "@/supabase/server";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
   return (
     <main className="mx-auto flex min-h-[calc(100vh-73px)] w-full max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
       <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Focus Tracker SaaS</p>
@@ -11,10 +17,10 @@ export default function HomePage() {
         Plan your schedule, track focused work, and build skills one day at a time.
       </p>
       <Link
-        href="/login"
+        href={user ? "/dashboard" : "/login"}
         className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700"
       >
-        Login
+        {user ? "Go to Dashboard" : "Login"}
       </Link>
     </main>
   );

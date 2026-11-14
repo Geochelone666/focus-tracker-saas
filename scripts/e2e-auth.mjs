@@ -18,6 +18,9 @@ try {
 
   const home = await page.goto(base);
   assert.equal(home.status(), 200, 'landing page renders');
+  const homeLogin = page.getByRole('main').getByRole('link', { name: 'Login', exact: true });
+  assert.equal(await homeLogin.getAttribute('href'), '/login', 'signed-out homepage links to login');
+  assert.equal(await page.getByRole('main').getByRole('link', { name: 'Go to Dashboard', exact: true }).count(), 0, 'signed-out homepage has no dashboard button');
 
   for (const path of protectedPaths) {
     const res = await page.goto(base + path);
