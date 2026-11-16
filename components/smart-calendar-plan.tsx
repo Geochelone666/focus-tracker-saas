@@ -82,8 +82,8 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
         operation={draftId:result.draftId!,requestId:crypto.randomUUID()};persist(operation);
       }
       const result=await confirmCalendarSelection(operation.draftId,operation.requestId);
-      if(result.error){setNotice(result.error);return;}
-      persist(null);setReceipt(result.receiptId!);setUndoKey(null);setPreview(null);setEdits({});
+      if('error' in result){setNotice(result.error);return;}
+      persist(null);setReceipt(result.receiptId);setUndoKey(null);setPreview(null);setEdits({});
       setNotice('Plan saved. The calendar now shows the saved time blocks.');router.refresh();
     }catch{setNotice('The response was interrupted. Retry confirmation to check the same request safely.');}
   });
@@ -95,7 +95,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
     try{localStorage.setItem(`${key}:undo:${receipt}`,request);}catch{}
     try{
       const result=await undoCalendarSelection(receipt,request);
-      if(result.error){setNotice(result.error);return;}
+      if('error' in result){setNotice(result.error);return;}
       setReceipt(null);setPreview(null);setEdits({});setUndoKey(null);setNotice('Plan undone. Previous task times have been restored.');router.refresh();
     }catch{setNotice('Undo response interrupted. Retry undo to check the same request safely.');}
   });

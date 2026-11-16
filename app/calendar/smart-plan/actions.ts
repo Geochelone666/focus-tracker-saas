@@ -6,11 +6,19 @@ import { validateId } from '@/lib/validation';
 import { wallTimeInstants } from '@/lib/wall-time';
 import { validDate } from '@/lib/calendar';
 
+class CalendarAccessError extends Error {
+  constructor(readonly code: 'disabled' | 'unauthenticated') {
+    super(code);
+  }
+}
+
 async function context(){
-  if(process.env.FOCUS_SMART_CALENDAR_ENABLED!=='true')throw new Error('disabled');
+  if(process.env.FOCUS_SMART_CALENDAR_ENABLED!=='true')throw new CalendarAccessError('disabled');
   const supabase=await createClient();
   const {data:{user},error}=await supabase.auth.getUser();
-  if(error||!user)throw new Error('unauthorized');
+  if (error && (error.status === 0 || (error.status ?? 0) >= 500 ||
+    error.name === 'AuthRetryableFetchError')) throw error;
+  if (error || !user) throw new CalendarAccessError('unauthenticated');
   return {supabase,user};
 }
 function failure(code?:string){
@@ -77,25 +85,60 @@ export async function saveCalendarWorkHours(start:string,end:string,expected:str
     return {preferences:data as {start:string;end:string;revision:string}};
   }catch{return {error:'Could not save work hours. Your edits are kept; retry or reload to check the saved hours.'};}
 }
-export async function confirmCalendarSelection(draftId:string,requestId:string){
-  try{
-    validateId(draftId);validateId(requestId);
-    const {supabase}=await context();
-    const {data,error}=await supabase.rpc('confirm_calendar_draft',{p_draft:draftId,p_request:requestId});
-    if(error)return {error:failure(error.code)};
-    for(const path of ['/calendar','/calendar/smart-plan','/today','/inbox','/review'])revalidatePath(path);
-    return {receiptId:data.receipt_id as string};
-  }catch{return {error:failure()};}
+function writeFailure(errorCode: 'invalid' | 'unauthenticated' | 'unavailable' | 'conflict' | 'retry' | 'disabled', error: string) {
+  return { errorCode, error };
 }
-export async function undoCalendarSelection(receiptId:string,requestId:string){
-  try{
-    validateId(receiptId);validateId(requestId);
-    const {supabase}=await context();
-    const {error}=await supabase.rpc('undo_calendar_plan',{p_receipt:receiptId,p_request:requestId});
-    if(error)return {error:failure(error.code)};
-    for(const path of ['/calendar','/calendar/smart-plan','/today','/inbox','/review'])revalidatePath(path);
-    return {success:true};
-  }catch{return {error:failure()};}
+
+function rpcWriteFailure(code?: string) {
+  if (code === '40001' || code === '23P01') return writeFailure('conflict', failure(code));
+  if (code === '42501') return writeFailure('unavailable', failure(code));
+  if (code === '22023' || code === '22P02') return writeFailure('invalid', failure('22023'));
+  return writeFailure('retry', failure());
+}
+
+function interruptedWrite(error: unknown) {
+  if (error instanceof CalendarAccessError) {
+    return writeFailure(error.code, error.code === 'disabled'
+      ? 'Smart Calendar is unavailable in this environment.'
+      : 'Sign in again to continue.');
+  }
+  return writeFailure('retry', failure());
+}
+
+export async function confirmCalendarSelection(draftId: string, requestId: string) {
+  try {
+    validateId(draftId);
+    validateId(requestId);
+  } catch {
+    return writeFailure('invalid', 'The confirmation request is invalid. Generate a fresh preview.');
+  }
+  try {
+    const { supabase } = await context();
+    const { data, error } = await supabase.rpc('confirm_calendar_draft', { p_draft: draftId, p_request: requestId });
+    if (error) return rpcWriteFailure(error.code);
+    for (const path of ['/calendar', '/calendar/smart-plan', '/today', '/inbox', '/review']) revalidatePath(path);
+    return { receiptId: data.receipt_id as string };
+  } catch (error) {
+    return interruptedWrite(error);
+  }
+}
+
+export async function undoCalendarSelection(receiptId: string, requestId: string) {
+  try {
+    validateId(receiptId);
+    validateId(requestId);
+  } catch {
+    return writeFailure('invalid', 'The undo request is invalid. Reload to find the saved plan.');
+  }
+  try {
+    const { supabase } = await context();
+    const { error } = await supabase.rpc('undo_calendar_plan', { p_receipt: receiptId, p_request: requestId });
+    if (error) return rpcWriteFailure(error.code);
+    for (const path of ['/calendar', '/calendar/smart-plan', '/today', '/inbox', '/review']) revalidatePath(path);
+    return { success: true };
+  } catch (error) {
+    return interruptedWrite(error);
+  }
 }
 
 export async function setCalendarTaskLock(id:string,expected:string,expectedLock:string|null,locked:boolean){

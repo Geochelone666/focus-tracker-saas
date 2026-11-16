@@ -19,7 +19,8 @@ it('gates all actions when the feature is disabled',async()=>{
 });
 it('requires authenticated identity before any RPC',async()=>{
   mock.getUser.mockResolvedValue({data:{user:null},error:null});
-  expect(await confirmCalendarSelection(id,id)).toHaveProperty('error');
+  expect(await confirmCalendarSelection(id,id)).toHaveProperty('errorCode','unauthenticated');
+  expect(await undoCalendarSelection(id,id)).toHaveProperty('errorCode','unauthenticated');
   expect(mock.rpc).not.toHaveBeenCalled();
 });
 it('binds account-local manual edits and exact revision to guarded staging',async()=>{
@@ -34,8 +35,24 @@ it('passes the same request identity on retry and surfaces CAS conflicts',async(
   const result=await confirmCalendarSelection(id,id);
   await confirmCalendarSelection(id,id);
   expect(mock.rpc.mock.calls[0]).toEqual(mock.rpc.mock.calls[1]);
-  expect(result.error).toMatch(/fresh preview/);
-  expect(result.error).not.toContain('private');
+  expect(result).toMatchObject({ errorCode: 'conflict', error: expect.stringMatching(/fresh preview/) });
+  expect(result).not.toHaveProperty('error', expect.stringContaining('private'));
+});
+
+it('distinguishes invalid IDs, unavailable ownership and an interrupted write', async () => {
+  expect(await confirmCalendarSelection('bad', id)).toHaveProperty('errorCode', 'invalid');
+  expect(await undoCalendarSelection(id, 'bad')).toHaveProperty('errorCode', 'invalid');
+  expect(mock.rpc).not.toHaveBeenCalled();
+
+  mock.rpc.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'private SQL detail' } });
+  const unavailable = await undoCalendarSelection(id, id);
+  expect(unavailable).toHaveProperty('errorCode', 'unavailable');
+  expect(unavailable).not.toHaveProperty('error', expect.stringContaining('private'));
+
+  mock.rpc.mockRejectedValueOnce(new Error('connection failed'));
+  expect(await confirmCalendarSelection(id, id)).toHaveProperty('errorCode', 'retry');
+  mock.getUser.mockResolvedValueOnce({ data: { user: null }, error: { status: 503 } });
+  expect(await undoCalendarSelection(id, id)).toHaveProperty('errorCode', 'retry');
 });
 
 it('uses explicit target lock state and exact task/lock versions',async()=>{
