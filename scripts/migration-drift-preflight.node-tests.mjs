@@ -97,6 +97,21 @@ test('same version but different name is not considered a match', () => {
   assert.deepEqual(result.findings.map(x => x.code), ['NAME_MISMATCH']);
 });
 
+test('legacy null names report drift and cannot imply an alias or parity', () => {
+  withInventory(['001_one', '002_two'], env => {
+    const remoteFile = env.snapshot([
+      { version: '001', name: null },
+      { version: '003', name: null }
+    ]);
+    const result = runPreflight({ migrationsDir: env.migrationsDir, remoteFile });
+    assert.equal(result.status, 'BLOCKED');
+    assert.equal(result.remoteCount, 2);
+    assert.deepEqual(result.findings.map(item => item.code), [
+      'LOCAL_ONLY', 'REMOTE_NAME_MISSING', 'REMOTE_ONLY'
+    ]);
+  });
+});
+
 test('duplicate local versions, even with different filenames, block', () => {
   withInventory(['001_one', '001_two'], env => {
     const report = scanLocalMigrations(env.migrationsDir);
