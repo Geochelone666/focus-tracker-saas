@@ -55,6 +55,23 @@ Diagnostic codes are `VERSION_MISMATCH`, `NAME_MISMATCH`, `REMOTE_NAME_MISSING`,
 
 The regression suite covers the six Focus V1 alias examples in #55 and a pre-V1 owner-policy migration with a changed remote version. It also covers exact parity, unexpected versions, duplicate identifiers, ambiguous names, malformed/incomplete input and CLI exit codes.
 
+## Capture schema evidence
+
+Run the [schema evidence query](../scripts/sql/export-focus-schema-evidence.sql)
+against the intended project and against a disposable PostgreSQL replay of the
+pinned migration set. Save the results outside Git. Compare by kind, schema,
+object and member. The query covers public relations and routines, plus the
+`auth.users` triggers and related catalog entries. It records table privileges
+for the two client roles, row-level security, policies, indexes, constraints and
+columns without selecting application rows.
+
+Definition hashes depend on PostgreSQL's rendering of an object. Compare on the
+same PostgreSQL major version and review differences against the relevant
+migration and follow-up migrations. Equal hashes help confirm specific
+definitions. Review data changes and effective access separately. Only an
+operator with access to the intended hosted project can establish hosted
+evidence.
+
 ## Mandatory pre-release procedure (separate authorization)
 
 1. Freeze the exact proposed application SHA and migration set. Verify branch CI: web lint, types, unit/SQL migration suite, build, fixture-backed E2E and applicable native compatibility checks.
