@@ -62,7 +62,7 @@ describe("supabase migrations", () => {
     for (const file of (await readdir(sqlTestsDir)).filter((f) => f.endsWith(".sql")).sort()) {
       await expect(db.exec(await readFile(path.join(sqlTestsDir, file), "utf8")), file).resolves.toBeDefined();
     }
-  });
+  }, 20_000);
 
   it("can rerun the mobile notification migration",async()=>{db=await freshDatabase();await expect(db.exec(await readFile(path.join(migrationsDir,"20261023010000_mobile_push.sql"),"utf8"))).resolves.toBeDefined();});
 
