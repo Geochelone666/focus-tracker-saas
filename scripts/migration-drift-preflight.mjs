@@ -69,8 +69,8 @@ export function parseRemoteSnapshot(input) {
     if (!row || typeof row !== 'object' || Array.isArray(row) ||
         Object.keys(row).some(key => !['version', 'name'].includes(key)) ||
         typeof row.version !== 'string' || !VERSION_PATTERN.test(row.version) ||
-        typeof row.name !== 'string' || !NAME_PATTERN.test(row.name)) {
-      throw new PreflightError('INVALID_SNAPSHOT', 'Each remote row must contain only a valid version and name.');
+        (row.name !== null && (typeof row.name !== 'string' || !NAME_PATTERN.test(row.name)))) {
+      throw new PreflightError('INVALID_SNAPSHOT', 'Each remote row must contain only a valid version and a valid or null name.');
     }
     return { version: row.version, name: row.name };
   });
@@ -90,6 +90,7 @@ function duplicateFindings(rows, source) {
 }
 
 function potentialAliases(remote, candidates) {
+  if (remote.name === null) return [];
   return candidates.filter(local =>
     remote.name === local.name ||
     (local.version.length === 14 && remote.name.split('_').includes(local.version)));
@@ -108,7 +109,8 @@ export function compareInventories(local, remote, initialFindings = []) {
     if (exact) {
       matchedLocal.add(exact.version);
       if (exact.name !== item.name) {
-        findings.push({ code: 'NAME_MISMATCH', localVersion: exact.version, remoteVersion: item.version,
+        findings.push({ code: item.name === null ? 'REMOTE_NAME_MISSING' : 'NAME_MISMATCH',
+          localVersion: exact.version, remoteVersion: item.version,
           localName: exact.name, remoteName: item.name });
       }
     } else {
