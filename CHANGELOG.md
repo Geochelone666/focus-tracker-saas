@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — privacy access controls
+
+- Add Settings → Privacy and access, with account export and connection-management links.
+- Revoke the signed-in owner's AI keys and pause registered device reminders in one transaction, with explicit confirmation and safe retries.
+- Requires `20261126000000_privacy_access_controls.sql`. Hosted migration reconciliation remains required.
+
+
 ## Unreleased — guided first focus workflow
 
 - Add a skippable guide from Settings and Today for checking timezone, capturing a task, scheduling, focusing and reviewing recorded time. The guide also opens from a specific task.

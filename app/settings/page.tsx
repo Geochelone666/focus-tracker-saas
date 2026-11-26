@@ -9,6 +9,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return <main className="mx-auto max-w-2xl px-4 py-10">
     <h1 className="text-3xl font-bold">Settings</h1>
     <p className="mt-4"><Link href="/getting-started" className="underline">Open the focus workflow guide</Link></p>
+    <p className="mt-4"><Link href="/settings/privacy" className="underline">Privacy and connected access</Link></p>
     {process.env.FOCUS_DATA_EXPORT_ENABLED === 'true' && <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Your data</h2><p className="mb-3 text-sm">Download your tasks, focus records and preferences for your own records.</p><Link href="/settings/data" className="underline">Download your data</Link></section>}
     <section className="mt-6 rounded-lg border bg-white p-5"><h2 className="mb-3 text-lg font-semibold">Devices and AI</h2><p className="mb-3 text-sm">Sign in with the same account on your phone and computer. Visible pages check for updates every 30 seconds and when you return. Automatic refresh pauses while you have unsaved form input; reload or navigate after saving to resume.</p><Link href="/settings/integrations" prefetch={false} className="underline">Manage AI connections</Link><p className="mt-3"><Link href="/settings/notifications" prefetch={false} className="underline">Manage phone reminders</Link></p></section>
     {typeof params.error === 'string' && <p role="alert" className="mt-4 text-red-800">{params.error}</p>}
