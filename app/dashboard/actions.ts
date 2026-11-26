@@ -122,17 +122,13 @@ async function resolveStaleSession(action: "resume" | "discard") {
 
     const now = new Date();
     if (session && classifyActiveSession(session.started_at, now) === "stale") {
-      const table = supabase.from("focus_sessions");
       // Legacy recovery actions never delete history or rewrite the original start.
       // Resume a stale running session by pausing it first; the current UI can then resume.
-      const mutation = table.update({ focus_status: action === "resume" ? "paused" : "abandoned" });
-      let guarded = mutation
-        .eq("id", session.id)
-        .eq("user_id", user.id)
-        .eq("started_at", session.started_at)
-        .is("ended_at", null);
-      if (session.focus_revision !== undefined) guarded = guarded.eq("focus_revision", session.focus_revision);
-      const { error } = await guarded;
+      const { error } = await supabase.rpc("transition_focus", {
+        p_id: session.id,
+        p_revision: session.focus_revision,
+        p_action: action === "resume" ? "pause" : "abandon"
+      });
       if (error) throw error;
     }
   } catch (error) {
@@ -170,13 +166,11 @@ export async function cleanupDuplicateActiveSessions() {
     const latest = pickLatestActiveSession(sessions ?? []);
     for (const session of sessions ?? []) {
       if (session.id === latest?.id) continue;
-      const { error } = await supabase
-        .from("focus_sessions")
-        .update({ ended_at: session.started_at, duration_sec: 0, focus_status: "abandoned" })
-        .eq("id", session.id)
-        .eq("user_id", user.id)
-        .eq("started_at", session.started_at)
-        .is("ended_at", null);
+      const { error } = await supabase.rpc("transition_focus", {
+        p_id: session.id,
+        p_revision: session.focus_revision,
+        p_action: "abandon"
+      });
       if (error) throw error;
     }
   } catch (error) {
@@ -220,24 +214,15 @@ export async function stopSession(formData: FormData) {
     if (readError) throw readError;
 
     if (activeSession?.id && activeSession.started_at) {
-      const now = new Date();
-      const startedAt = new Date(activeSession.started_at);
-      const durationSec = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000));
-
-      let mutation = supabase
-        .from("focus_sessions")
-        .update({
-          ended_at: now.toISOString(),
-          duration_sec: durationSec,
-          note,
-          ...(skillId !== null ? { skill_id: skillId } : {})
-        })
-        .eq("id", activeSession.id)
-        .eq("user_id", user.id)
-        .eq("started_at", activeSession.started_at)
-        .is("ended_at", null);
-      if (activeSession.focus_revision !== undefined) mutation = mutation.eq("focus_revision", activeSession.focus_revision);
-      const { error } = await mutation;
+      // The database lifecycle RPC owns elapsed-time accounting and the
+      // optimistic revision check; never supply a client wall-time duration.
+      const { error } = await supabase.rpc("transition_focus", {
+        p_id: activeSession.id,
+        p_revision: activeSession.focus_revision,
+        p_action: "complete",
+        p_note: note,
+        p_skill: skillId
+      });
       if (error) throw error;
     }
   } catch (error) {

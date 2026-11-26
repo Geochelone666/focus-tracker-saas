@@ -1,0 +1,124 @@
+{
+  "description": "Synthetic, non-production, server-owned Focus rows and exact expected UTC placement. Date-only deadline 2026-11-02 maps to next Toronto midnight 2026-11-03T05:00Z. Manual 10:00-11:00 Toronto is fixed.",
+  "snapshot": {
+    "schema_version": "smart-calendar/v0.1",
+    "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "timezone": "America/Toronto",
+    "captured_at": "2026-11-02T13:00:00.000Z",
+    "window": {
+      "start_at": "2026-11-02T13:00:00.000Z",
+      "end_at": "2026-11-03T05:00:00.000Z"
+    },
+    "base_version_id": "10000000-0000-4000-8000-000000000010",
+    "schedules": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "updated_at": "2026-11-01T02:03:01.123456Z",
+        "priority": "high",
+        "estimated_minutes": 60,
+        "scheduled_date": null,
+        "scheduled_time": null,
+        "deadline": "2026-11-02",
+        "is_done": false,
+        "deleted_at": null,
+        "deferral_count": 0,
+        "project_id": null,
+        "skill_id": null
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "updated_at": "2026-11-01T02:03:02.123456Z",
+        "priority": "normal",
+        "estimated_minutes": null,
+        "scheduled_date": "2026-11-02",
+        "scheduled_time": null,
+        "deadline": "2026-11-02",
+        "is_done": false,
+        "deleted_at": null,
+        "deferral_count": 0,
+        "project_id": null,
+        "skill_id": null
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000003",
+        "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "updated_at": "2026-11-01T02:03:03.123456Z",
+        "priority": "normal",
+        "estimated_minutes": 30,
+        "scheduled_date": "2026-11-02",
+        "scheduled_time": "13:00",
+        "deadline": null,
+        "is_done": false,
+        "deleted_at": null,
+        "deferral_count": 0,
+        "project_id": null,
+        "skill_id": null
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "updated_at": "2026-11-01T02:03:04.123456Z",
+        "priority": "normal",
+        "estimated_minutes": 60,
+        "scheduled_date": "2026-11-02",
+        "scheduled_time": "10:00",
+        "deadline": null,
+        "is_done": false,
+        "deleted_at": null,
+        "deferral_count": 0,
+        "project_id": null,
+        "skill_id": null
+      }
+    ],
+    "availability": [
+      {
+        "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "start_at": "2026-11-02T14:00:00.000Z",
+        "end_at": "2026-11-02T20:00:00.000Z"
+      }
+    ],
+    "busy_intervals": [],
+    "focus_sessions": [],
+    "accepted_blocks": [
+      {
+        "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "schedule_id": "00000000-0000-4000-8000-000000000003",
+        "version_id": "10000000-0000-4000-8000-000000000010",
+        "expected_updated_at": "2026-11-01T02:03:03.123456Z",
+        "is_locked": false,
+        "start_at": "2026-11-02T18:00:00.000Z",
+        "end_at": "2026-11-02T18:30:00.000Z"
+      }
+    ],
+    "policy": {
+      "slotMinutes": 15,
+      "breakMinutes": 0,
+      "defaultEstimateMinutes": 30
+    }
+  },
+  "expected": {
+    "algorithm_version": "smart-scheduler-v1",
+    "placements": [
+      {
+        "schedule_id": "00000000-0000-4000-8000-000000000001",
+        "start_at": "2026-11-02T14:00:00.000Z",
+        "end_at": "2026-11-02T15:00:00.000Z"
+      },
+      {
+        "schedule_id": "00000000-0000-4000-8000-000000000002",
+        "start_at": "2026-11-02T16:00:00.000Z",
+        "end_at": "2026-11-02T16:30:00.000Z"
+      },
+      {
+        "schedule_id": "00000000-0000-4000-8000-000000000003",
+        "start_at": "2026-11-02T18:00:00.000Z",
+        "end_at": "2026-11-02T18:30:00.000Z"
+      }
+    ],
+    "unplaced": [],
+    "hard_violations": 0,
+    "expected_user": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  }
+}

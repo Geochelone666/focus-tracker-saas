@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — experimental Smart Calendar integration
+
+- Add original/selected day timelines, mobile view switching, overlap/break feedback and exact-version task lock controls. Preserve unsaved edits when a changed work window requires regeneration.
+- Requires `20261104010000_calendar_lock_controls.sql` after the preview snapshot migration. The experimental flag remains disabled by default.
+
+- Add a bounded owner snapshot and a feature-gated real preview, selective/manual edits, versioned confirmation, refresh recovery and CAS undo.
+- Keep manual and locked blocks fixed; reject active focus, stale task revisions and changed timezones.
+- Add snapshot/staging migration `20261104000000_calendar_preview_snapshot.sql` and SQL, action and 390px browser workflow coverage.
+- `FOCUS_SMART_CALENDAR_ENABLED` defaults off; hosted migration drift and independent contract/design acceptance remain release gates.
+
 ## Unreleased — Focus V1 batch 1
 
 - Add persistent count-up/countdown timing, pause/resume, revision-checked atomic focus transitions and retained zero-credit abandonment.

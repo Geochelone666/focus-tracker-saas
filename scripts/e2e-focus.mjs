@@ -2,7 +2,7 @@
 // No hosted Supabase, production credentials, or production data are used.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { chromium } from '@playwright/test';
@@ -48,6 +48,11 @@ const server=createServer(async(req,res)=>{
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/set_calendar_task_lock') return (await db.query('select public.set_calendar_task_lock($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_expected_lock,body.p_locked])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/calendar_preview_snapshot') return (await db.query('select public.calendar_preview_snapshot() as value')).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/stage_calendar_preview') return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/confirm_calendar_draft') return (await db.query('select public.confirm_calendar_draft($1,$2) as value',[body.p_draft,body.p_request])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/undo_calendar_plan') return (await db.query('select public.undo_calendar_plan($1,$2) as value',[body.p_receipt,body.p_request])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/analytics_report') return (await db.query('select public.analytics_report($1,$2,$3) as report',[body.p_from,body.p_to,body.p_offset??0])).rows[0].report;
           if(url.pathname==='/rest/v1/rpc/task_focus_totals') return (await db.query('select * from public.task_focus_totals($1)',[body.p_ids])).rows;
           if(url.pathname==='/rest/v1/rpc/project_focus_totals') return (await db.query('select * from public.project_focus_totals()')).rows;
@@ -92,7 +97,7 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(fixturePort,'127.0.0.1',resolve));
 let logs='';
-const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
 app.stdout.on('data',chunk=>{logs+=chunk;});app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 const rows=()=>serial(async()=>(await db.query('select * from public.focus_sessions order by created_at,id')).rows);
@@ -196,7 +201,14 @@ try {
   await a.reload();await a.setViewportSize({width:390,height:844});
   await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
   const mobileEditor=a.getByRole('heading',{name:'Arrange: Calendar captured task'}).locator('..');
-  await mobileEditor.getByLabel('Duration (minutes)').fill('60');await mobileEditor.getByRole('button',{name:'Save time block'}).click();
+  // Keyboard-only mobile edit: focus, select-all, type and activate via Enter.
+  const durationControl=mobileEditor.getByLabel('Duration (minutes)');
+  await durationControl.focus();
+  await a.keyboard.press('ControlOrMeta+A');
+  await a.keyboard.type('60');
+  const saveWithKeyboard=mobileEditor.getByRole('button',{name:'Save time block'});
+  await saveWithKeyboard.focus();
+  await a.keyboard.press('Enter');
   await waitFor(async()=>(await calendarTask()).estimated_minutes===60,'Mobile edit did not persist');
   assert.equal((await calendarTask()).deadline,'2026-12-31');
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile calendar overflow');
@@ -212,7 +224,22 @@ try {
   await reschedule.getByRole('button',{name:'Save time block'}).click();await waitFor(async()=>(await calendarTask()).scheduled_date===today,'Replan failed');
   await a.getByRole('link',{name:'week',exact:true}).click();
   await a.getByRole('region',{name:'week time blocking'}).waitFor();
+
+  const dayPicker=a.getByRole('combobox',{name:'Week day (mobile)'});
+  await dayPicker.waitFor();
+  const originalDay=await dayPicker.inputValue();
+  const alternateDay=await dayPicker.locator('option').evaluateAll(options=>options.map(x=>x.value).find(v=>v!==''));
+  const nextDay=alternateDay===originalDay?await dayPicker.locator('option').nth(1).getAttribute('value'):alternateDay;
+  assert.ok(nextDay && nextDay!==originalDay,'Mobile week must allow changing days');
+  await dayPicker.selectOption(nextDay);
+  assert.ok(await a.getByLabel('Timeline '+nextDay,{exact:true}).isVisible(),'Mobile selected day must be visible');
+  await dayPicker.selectOption(originalDay);
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile week overflow');
+  await mkdir('test-artifacts',{recursive:true});
+  await a.screenshot({path:'test-artifacts/f2-f02-calendar-mobile-390.png',fullPage:true});
+  await a.setViewportSize({width:1280,height:900});
+  await a.screenshot({path:'test-artifacts/f2-f02-calendar-desktop-1280.png',fullPage:true});
+  await a.setViewportSize({width:390,height:844});
   await a.screenshot({path:'/tmp/focus-v1-calendar-390.png',fullPage:true});
   await a.goto(base+'/today');
   const taskCard=a.locator('li').filter({has:a.getByRole('heading',{name:'Calendar captured task',exact:true})});
@@ -242,6 +269,115 @@ try {
   await quick.getByLabel('Date (optional)',{exact:true}).fill(new Date(Date.parse(today)+7*86400000).toISOString().slice(0,10));
   await quick.getByRole('button',{name:'Add plan',exact:true}).click();
   await waitFor(async()=>serial(async()=>(await db.query("select count(*)::int as n from public.schedules where title='Next week adjustment'")).rows[0].n===1),'Future adjustment missing');
+
+  // Fixture-only Smart Calendar preview: browser decisions cannot mutate schedules.
+  const beforePreview=await serial(async()=>(await db.query('select count(*)::int as n from public.schedules')).rows[0].n);
+  await a.setViewportSize({width:390,height:844});
+  await a.goto(base+'/calendar/smart-preview');
+  await a.getByRole('heading',{name:'Review a proposed day.'}).waitFor();
+  await a.getByRole('button',{name:'Keep original'}).first().click();
+  await a.getByRole('button',{name:'Accept suggestion'}).first().click();
+  await a.getByRole('button',{name:'Lock original'}).first().click();
+  await a.getByRole('button',{name:'Unlock block'}).first().click();
+  await a.getByRole('button',{name:'Conflicts',exact:true}).click();
+  await a.getByRole('button',{name:'All',exact:true}).click();
+  const physicsCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Physics problem set'} )});
+  await physicsCard.getByText('Adjust time manually').click();
+  await physicsCard.getByLabel('Manual start for Physics problem set').fill('16:00');
+  await physicsCard.getByLabel('Manual duration for Physics problem set').fill('60');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('button',{name:'Undo demo confirmation'}).waitFor();
+  await a.getByRole('button',{name:'Undo demo confirmation'}).click();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('submit');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('alert').filter({hasText:'Simulated submit failure'}).waitFor();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('revision');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('alert').filter({hasText:'Simulated stale revision'}).waitFor();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('network');
+  await a.getByRole('button',{name:'Reload example'}).click();
+  await a.getByRole('alert').filter({hasText:'Simulated network failure'}).waitFor();
+  await a.getByRole('button',{name:'Retry sample'}).click();
+  await a.getByRole('button',{name:'Reset decisions'}).click();
+  assert.equal(await serial(async()=>(await db.query('select count(*)::int as n from public.schedules')).rows[0].n),beforePreview,'Demo preview must not write tasks');
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Smart Calendar mobile overflow');
+  await mkdir('test-artifacts',{recursive:true});
+  await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-mobile.png',fullPage:true});
+  await a.setViewportSize({width:1280,height:900});
+  await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-desktop.png',fullPage:true});
+  // Real experimental UI -> algorithm -> staging -> atomic SQL -> reload -> CAS undo.
+  const smartId='77777777-7777-4777-8777-777777777777';
+  await serial(()=>db.query("insert into schedules(id,user_id,title,estimated_minutes) values($1,$2,'Smart calendar integration task',60)",[smartId,owner]));
+  const future=new Date(Date.now()+86400000*3).toISOString().slice(0,10);
+  await a.setViewportSize({width:390,height:844});
+  await a.goto(base+'/calendar/smart-plan');
+  await a.getByText('Protect a task from scheduling',{exact:true}).click();
+  await a.getByLabel('Task to protect',{exact:true}).selectOption(smartId);
+  await a.getByRole('button',{name:'Lock task',exact:true}).click();
+  await a.getByText('Task locked. Generate a fresh preview; its current time will stay fixed.',{exact:true}).waitFor();
+  await a.reload();
+  await a.getByText('Protect a task from scheduling',{exact:true}).click();
+  await a.getByLabel('Task to protect',{exact:true}).selectOption(smartId);
+  await a.getByRole('button',{name:'Unlock task',exact:true}).waitFor();
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await a.getByRole('heading',{name:'Compare your day',exact:true}).waitFor();
+  assert.equal(await a.locator('article').filter({has:a.getByRole('heading',{name:'Smart calendar integration task',exact:true})}).count(),0,'Locked Inbox task must be excluded');
+  await a.getByRole('button',{name:'Unlock task',exact:true}).click();
+  await a.getByText('Task unlocked. Generate a fresh preview. Manually scheduled tasks still keep their time.',{exact:true}).waitFor();
+
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  const smartCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Smart calendar integration task',exact:true})});
+  await smartCard.waitFor();
+  // Choose only this task; leave all other proposals untouched.
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await smartCard.getByLabel('Start for Smart calendar integration task',{exact:true}).fill('14:00');
+  await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).fill('90');
+  await smartCard.getByText(`On confirmation: ${future} 14:00 (90 min)`,{exact:true}).waitFor();
+  const afterTimeline=a.getByRole('region',{name:'After selection timeline',exact:true});
+  assert.ok((await afterTimeline.innerText()).includes('14:00'),'Timeline reflects manual edit');
+  await a.getByRole('button',{name:'Original plan',exact:true}).click();
+  await a.getByRole('region',{name:'Original plan timeline',exact:true}).waitFor({state:'visible'});
+  await a.getByRole('button',{name:'After selection',exact:true}).click();
+  await a.getByLabel('Work ends',{exact:true}).fill('16:00');
+  assert.equal(await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).isDisabled(),true,'Changing window must invalidate confirmation');
+  assert.equal(await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).inputValue(),'90','Window change preserves unsaved edits');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await a.getByText('Review the selected changes below. Nothing has been saved.',{exact:true}).waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await smartCard.getByLabel('Start for Smart calendar integration task',{exact:true}).fill('14:00');
+  await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).fill('90');
+
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real preview controls overflow');
+  await a.screenshot({path:'test-artifacts/f2-f02-live-calendar-mobile.png',fullPage:true});
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  await a.getByText('Plan saved. The calendar now shows the saved time blocks.',{exact:true}).waitFor();
+  const persisted=await serial(()=>db.query("select scheduled_date::text as day,scheduled_time::text as time,estimated_minutes as minutes from schedules where id=$1",[smartId]));
+  assert.deepEqual(persisted.rows,[{day:future,time:'14:00:00',minutes:90}]);
+  await a.reload();
+  await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).waitFor();
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real Smart Calendar mobile overflow');
+  await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).click();
+  await a.getByText('Plan undone. Previous task times have been restored.',{exact:true}).waitFor();
+  assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
+    [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await smartCard.waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await serial(()=>db.query("update schedules set title='Changed on another device' where id=$1",[smartId]));
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  await a.getByText('Your tasks or plan changed. Generate a fresh preview before saving.',{exact:true}).waitFor();
+  assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
+    [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
+  console.log('PASS: real Smart Calendar generate / select / manual edit / confirm / reload / undo / stale-device rejection at 390px');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}
