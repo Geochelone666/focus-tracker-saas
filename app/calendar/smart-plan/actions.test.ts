@@ -67,12 +67,47 @@ it('saves work hours with exact preference CAS and rejects stale device edits',a
   expect(await saveCalendarWorkHours('09:00','17:00','1','America/Toronto')).toHaveProperty('preferences.revision','2');
   expect(mock.rpc).toHaveBeenCalledWith('save_calendar_work_preferences',{p_start:'09:00',p_end:'17:00',p_expected:'1',p_timezone:'America/Toronto'});
   mock.rpc.mockResolvedValue({data:null,error:{code:'40001'}});
-  expect((await saveCalendarWorkHours('10:00','18:00','1','America/Toronto')).error).toMatch(/another device/);
+  expect(await saveCalendarWorkHours('10:00','18:00','1','America/Toronto')).toMatchObject({errorCode:'conflict',error:expect.stringMatching(/another device/)});
 });
 it('refuses unsaved work hours and unknown preview envelopes',async()=>{
   mock.rpc.mockResolvedValue({data:{work_preferences:{start:'09:00',end:'17:00'}},error:null});
-  expect((await generateCalendarPreview({date:'2027-06-15',days:1,start:'08:00',end:'17:00'})).error).toMatch(/Save your work hours/);
+  expect(await generateCalendarPreview({date:'2027-06-15',days:1,start:'08:00',end:'17:00'})).toMatchObject({errorCode:'conflict',error:expect.stringMatching(/Save your work hours/)});
   mock.rpc.mockClear();
   expect(await stageCalendarSelection({timezone:'UTC',revision:'0',availability:[],changes:[],contract:{schema_version:'unknown',input_fingerprint:'sha256:'+'a'.repeat(64),base_version_id:null,work_revision:'1'}})).toHaveProperty('error');
   expect(mock.rpc).not.toHaveBeenCalled();
+});
+
+it('classifies authentication and transport failures across preview, staging, preferences and locks', async () => {
+  const calls = [
+    () => generateCalendarPreview({date:'2027-06-15',days:1,start:'09:00',end:'17:00'}),
+    () => stageCalendarSelection({timezone:'UTC',revision:'0',availability:[],changes:[],contract:{schema_version:'unknown',input_fingerprint:'',base_version_id:null,work_revision:'1'}}),
+    () => saveCalendarWorkHours('09:00','17:00','1','UTC'),
+    () => setCalendarTaskLock(id,'2026-11-05T00:00:00Z',null,true),
+  ];
+  mock.getUser.mockResolvedValue({data:{user:null},error:null});
+  for (const call of calls) expect(await call()).toHaveProperty('errorCode','unauthenticated');
+  expect(mock.rpc).not.toHaveBeenCalled();
+  mock.getUser.mockRejectedValue(new Error('private network details'));
+  for (const call of calls) {
+    const result = await call();
+    expect(result).toHaveProperty('errorCode','retry');
+    expect(result).not.toHaveProperty('error',expect.stringContaining('private'));
+  }
+});
+it('retains conflict and unavailable categories for preference and lock RPCs', async () => {
+  mock.rpc.mockResolvedValue({data:null,error:{code:'42501',message:'private row detail'}});
+  expect(await setCalendarTaskLock(id,'2026-11-05T00:00:00Z',null,true)).toHaveProperty('errorCode','unavailable');
+  mock.rpc.mockResolvedValue({data:null,error:{code:'40001'}});
+  expect(await saveCalendarWorkHours('09:00','17:00','1','UTC')).toHaveProperty('errorCode','conflict');
+  expect(await generateCalendarPreview({date:'2027-06-15',days:1,start:'09:00',end:'17:00'})).toHaveProperty('errorCode','conflict');
+});
+
+it('keeps staging transport failures retryable after valid input conversion', async () => {
+  mock.rpc.mockRejectedValue(new Error('private transport details'));
+  const selection = {timezone:'UTC',revision:'0',availability:[{start_at:'2027-06-15T09:00:00Z',end_at:'2027-06-15T17:00:00Z'}],
+    changes:[{id,expected_updated_at:'2026-11-04T12:00:00.123456Z',date:'2027-06-15',time:'10:00',minutes:30}],
+    contract:{schema_version:'smart-calendar/v0.1',input_fingerprint:'sha256:'+'a'.repeat(64),base_version_id:null,work_revision:'1'}};
+  expect(await stageCalendarSelection(selection)).toHaveProperty('errorCode','retry');
+  expect(await stageCalendarSelection({...selection,changes:[{...selection.changes[0],time:'bad'}]})).toHaveProperty('errorCode','invalid');
+  expect(mock.rpc).toHaveBeenCalledTimes(1);
 });

@@ -31,7 +31,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
   const saveHours=()=>startTransition(async()=>{
     try{
       const result=await saveCalendarWorkHours(start,end,workHours?.revision??'0',zone);
-      if(result.error){setNotice(result.error);return;}
+      if('error' in result){setNotice(result.error);return;}
       setWorkHours(result.preferences!);changedWindow();
       setNotice('Work hours saved across devices. Generate a new preview to use them.');
       router.refresh();
@@ -41,7 +41,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
     if(!selectedTask)return;
     try{
       const result=await setCalendarTaskLock(selectedTask.id,selectedTask.revision,selectedTask.lockVersion,!selectedTask.locked);
-      if(result.error){setNotice(result.error);return;}
+      if('error' in result){setNotice(result.error);return;}
       setTasks(current=>current.map(task=>task.id===selectedTask.id?{...task,locked:result.locked!,lockVersion:result.lockVersion??null}:task));
       setPreview(null);setEdits({});setWindowChanged(false);
       setNotice(result.locked?'Task locked. Generate a fresh preview; its current time will stay fixed.':'Task unlocked. Generate a fresh preview. Manually scheduled tasks still keep their time.');
@@ -58,7 +58,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
     setNotice('');
     try{
       const result=await generateCalendarPreview({date,days,start,end});
-      if(result.error){setNotice(result.error);return;}
+      if('error' in result){setNotice(result.error);return;}
       if(!result.preview)return;
       const next:Record<string,Edit>={};
       const changed=new Set(result.preview.output.changes.filter(c=>c.after&&JSON.stringify(c.before)!==JSON.stringify(c.after)).map(c=>c.schedule_id));
@@ -78,7 +78,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
         const result=await stageCalendarSelection({timezone:preview.timezone,revision:preview.revision,availability:preview.availability,
           contract:{schema_version:preview.output.schema_version,input_fingerprint:preview.output.input_fingerprint,base_version_id:preview.output.base_version_id,work_revision:preview.workRevision!},
           changes:chosen.map(([id,edit])=>({id,expected_updated_at:preview.output.placements.find(p=>p.schedule_id===id)!.expected_updated_at,date:edit.date,time:edit.time,minutes:edit.minutes}))});
-        if(result.error){setNotice(result.error);return;}
+        if('error' in result){setNotice(result.error);return;}
         operation={draftId:result.draftId!,requestId:crypto.randomUUID()};persist(operation);
       }
       const result=await confirmCalendarSelection(operation.draftId,operation.requestId);
