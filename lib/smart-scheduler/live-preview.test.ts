@@ -6,7 +6,7 @@ const source=():CalendarRead=>({user_id:fixture.snapshot.user_id,captured_at:'20
 const window={date:'2026-11-02',days:1,start:'09:00',end:'17:00'};
 it('bounds reads, rejects active focus, ownership mismatch and invalid horizons',()=>{
   const read=source();
-  expect(()=>liveCalendarPreview(read,'other',window)).toThrow(/owner/);
+  expect(()=>liveCalendarPreview(read,'other',window)).toThrow(/unavailable for your account/);
   expect(()=>liveCalendarPreview({...read,has_active_focus:true},read.user_id,window)).toThrow(/focus/);
   expect(()=>liveCalendarPreview({...read,schedules:Array(501).fill(read.schedules[0])},read.user_id,window)).toThrow(/500/);
   expect(()=>liveCalendarPreview(read,read.user_id,{...window,days:15})).toThrow(/1–14/);
@@ -22,4 +22,15 @@ it('excludes a locked inbox task and preserves a manually timed task as fixed',(
   expect(liveCalendarPreview(read,read.user_id,window).output.placements).toEqual([]);
   read.locked_ids=[];read.schedules[0].scheduled_date=window.date;read.schedules[0].scheduled_time='10:00:00';
   expect(liveCalendarPreview(read,read.user_id,window).output.placements).toEqual([]);
+});
+
+it('distinguishes active focus conflicts from input and ownership failures',()=>{
+  const read=source();
+  const check=(input:CalendarRead,expected:string)=>{
+    try{liveCalendarPreview(input,read.user_id,window);throw new Error('Expected preview rejection');}
+    catch(error){expect(error).toHaveProperty('code',expected);}
+  };
+  check({...read,has_active_focus:true},'conflict');
+  check({...read,user_id:'other'},'unavailable');
+  check({...read,schedules:Array(501).fill(read.schedules[0])},'invalid');
 });
