@@ -93,3 +93,17 @@ pagination correction. It reuses existing task and focus data and adds no migrat
 GitHub API access was restored on 2026-11-14 and stack review began in PRs
 [#80 through #84](https://github.com/Geochelone666/focus-tracker-saas/pull/80).
 Hosted migration reconciliation and independent release acceptance remain open.
+
+
+## Privacy access controls
+
+Settings now provides a confirmed account-scoped operation to revoke existing AI
+keys and pause registered device reminders in one transaction. The invoker RPC
+uses existing owner policies and privileges. Retrying preserves revocation times,
+and a failure in either update rolls back the operation. Tasks and focus records
+stay accessible. Requests and notifications already in flight may finish.
+
+Migration `20261126000000_privacy_access_controls.sql` brings the integrated
+migration set to 39 files. This increment completes connection controls within
+Phase 6A. Reauthenticated account deletion, backup retention verification and
+hosted privacy acceptance remain open.

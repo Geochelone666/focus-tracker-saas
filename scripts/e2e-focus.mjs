@@ -61,6 +61,7 @@ const server=createServer(async(req,res)=>{
           if(url.pathname==='/rest/v1/rpc/confirm_calendar_draft') return (await db.query('select public.confirm_calendar_draft($1,$2) as value',[body.p_draft,body.p_request])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/undo_calendar_plan') return (await db.query('select public.undo_calendar_plan($1,$2) as value',[body.p_receipt,body.p_request])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/analytics_report') return (await db.query('select public.analytics_report($1,$2,$3) as report',[body.p_from,body.p_to,body.p_offset??0])).rows[0].report;
+          if(url.pathname==='/rest/v1/rpc/revoke_account_connections') return (await db.query('select public.revoke_account_connections() as result')).rows[0].result;
           if(url.pathname==='/rest/v1/rpc/task_focus_totals') return (await db.query('select * from public.task_focus_totals($1)',[body.p_ids])).rows;
           if(url.pathname==='/rest/v1/rpc/project_focus_totals') return (await db.query('select * from public.project_focus_totals()')).rows;
           if(url.pathname==='/rest/v1/rpc/skill_focus_totals') return (await db.query('select * from public.skill_focus_totals($1,$2)',[body.p_from,body.p_to])).rows;
@@ -424,11 +425,13 @@ try {
   await serial(()=>db.query("insert into schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values($1,$2,'Recovery workflow task',$3,'09:00',60)",[recoveryId,owner,recoveryDay]));
   await a.goto(base+'/calendar/recovery');
   const recoveryCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Recovery workflow task',exact:true})});
+  await recoveryCard.locator('form[data-recovery-ready="true"]').waitFor();
   await recoveryCard.getByLabel('Your remaining estimate (minutes)').fill('30');
   await recoveryCard.getByLabel('Where to pick up next').fill('Resume at the SQL regression checks');
   await recoveryCard.getByRole('button',{name:'Save recovery context',exact:true}).click();
   await recoveryCard.getByText('Recovery context saved. Task times and focus records are unchanged.',{exact:true}).waitFor();
   await a.reload();
+  await recoveryCard.locator('form[data-recovery-ready="true"]').waitFor();
   assert.equal(await recoveryCard.getByLabel('Your remaining estimate (minutes)').inputValue(),'30');
   assert.equal(await recoveryCard.getByLabel('Where to pick up next').inputValue(),'Resume at the SQL regression checks');
   await recoveryCard.getByLabel('Where to pick up next').fill('Keep this unsaved recovery context');
@@ -529,6 +532,15 @@ try {
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Guide overflow at 390px');
   await a.screenshot({path:'test-artifacts/f2-f02-first-workflow-mobile.png',fullPage:true});
   console.log('PASS: guided capture / preselected calendar / saved block / focus / pause / resume / real recorded progress at 390px');
+  await serial(()=>db.query("insert into push_devices(id,user_id,expo_token,platform,name) values('b9200000-0000-4000-8000-000000000001',$1,'ExpoPushToken[PrivacyFixture]','android','Privacy fixture')",[owner]));
+  await a.goto(base+'/settings/privacy');
+  await a.getByRole('checkbox').check();
+  await a.getByRole('button',{name:'Revoke keys and pause reminders',exact:true}).click();
+  await a.getByRole('status').filter({hasText:'All existing AI keys are revoked'}).waitFor();
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from integration_tokens where user_id=$1 and revoked_at is null',[owner]))).rows[0].count,0);
+  assert.equal((await serial(()=>db.query('select enabled from push_devices where id=$1',['b9200000-0000-4000-8000-000000000001']))).rows[0].enabled,false);
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Privacy overflow at 390px');
+  console.log('PASS: confirmed owner privacy control revokes AI keys and pauses device reminders at 390px');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}
