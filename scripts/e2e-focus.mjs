@@ -231,7 +231,7 @@ try {
   await reschedule.getByRole('button',{name:'Save time block'}).click();await waitFor(async()=>(await calendarTask()).scheduled_date===today,'Replan failed');
   await a.getByRole('link',{name:'week',exact:true}).click();
   await a.getByRole('region',{name:'week time blocking'}).waitFor();
-  
+
   const dayPicker=a.getByRole('combobox',{name:'Week day (mobile)'});
   await dayPicker.waitFor();
   const originalDay=await dayPicker.inputValue();
@@ -276,7 +276,7 @@ try {
   await quick.getByLabel('Date (optional)',{exact:true}).fill(new Date(Date.parse(today)+7*86400000).toISOString().slice(0,10));
   await quick.getByRole('button',{name:'Add plan',exact:true}).click();
   await waitFor(async()=>serial(async()=>(await db.query("select count(*)::int as n from public.schedules where title='Next week adjustment'")).rows[0].n===1),'Future adjustment missing');
-  
+
   // Fixture-only Smart Calendar preview: browser decisions cannot mutate schedules.
   const beforePreview=await serial(async()=>(await db.query('select count(*)::int as n from public.schedules')).rows[0].n);
   await a.setViewportSize({width:390,height:844});
