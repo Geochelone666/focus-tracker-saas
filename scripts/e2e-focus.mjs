@@ -425,11 +425,13 @@ try {
   await serial(()=>db.query("insert into schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values($1,$2,'Recovery workflow task',$3,'09:00',60)",[recoveryId,owner,recoveryDay]));
   await a.goto(base+'/calendar/recovery');
   const recoveryCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Recovery workflow task',exact:true})});
+  await recoveryCard.locator('form[data-recovery-ready="true"]').waitFor();
   await recoveryCard.getByLabel('Your remaining estimate (minutes)').fill('30');
   await recoveryCard.getByLabel('Where to pick up next').fill('Resume at the SQL regression checks');
   await recoveryCard.getByRole('button',{name:'Save recovery context',exact:true}).click();
   await recoveryCard.getByText('Recovery context saved. Task times and focus records are unchanged.',{exact:true}).waitFor();
   await a.reload();
+  await recoveryCard.locator('form[data-recovery-ready="true"]').waitFor();
   assert.equal(await recoveryCard.getByLabel('Your remaining estimate (minutes)').inputValue(),'30');
   assert.equal(await recoveryCard.getByLabel('Where to pick up next').inputValue(),'Resume at the SQL regression checks');
   await recoveryCard.getByLabel('Where to pick up next').fill('Keep this unsaved recovery context');
