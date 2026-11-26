@@ -13,6 +13,14 @@ node --test scripts/migration-drift-preflight.node-tests.mjs
 
 Local-only checks SQL migration filename format, duplicate versions and an empty directory. A passing result says **LOCAL_ONLY**, not that production is in sync. CI runs both commands without network access, credentials, database clients, or changes to SQL files.
 
+Use the [registry export query](../scripts/sql/export-migration-inventory.sql) on a
+read-only connection to the intended project. In the SQL editor, copy the single
+`inventory` cell as JSON. With an existing read-only PostgreSQL connection,
+`psql -X -A -t -v ON_ERROR_STOP=1 -f scripts/sql/export-migration-inventory.sql`
+prints that same JSON value. Verify the project identity and the number of
+registry rows before comparing the snapshot. If row-level security applies to
+the export role, the query marks the snapshot incomplete.
+
 For a manually exported **complete, sanitized** remote migration registry inventory, create a local JSON file (outside Git and preferably outside the repository):
 
 ```json
@@ -32,7 +40,7 @@ node scripts/migration-drift-preflight.mjs --remote /path/to/sanitized-inventory
 node scripts/migration-drift-preflight.mjs --remote /path/to/sanitized-inventory.json --format json
 ```
 
-The input schema allows only `complete` and `migrations` at the root and only `version` / `name` per row. No credentials, SQL bodies, connection strings, emails, tokens, object descriptions, timestamps, or other fields. A snapshot with unknown fields, invalid characters, duplicates, missing rows, or `complete: false` is blocked. Do **not** commit real snapshots or secrets. Do not send one to a public CI job. Only the local-only mode runs in CI.
+The input schema allows only `complete` and `migrations` at the root and only `version` / `name` per row. No credentials, SQL bodies, connection strings, emails, tokens, object descriptions, timestamps, or other fields. Invalid fields and characters, duplicate versions, and `complete: false` block comparison. An unnamed legacy row can be captured as `name: null` and requires review even when its version matches. Do **not** commit real snapshots or secrets. Do not send one to a public CI job. Only the local-only mode runs in CI.
 
 ## Exit codes and meaning
 
@@ -43,9 +51,26 @@ The input schema allows only `complete` and `migrations` at the root and only `v
 | 1 | BLOCKED | Drift or ambiguous inventory: **stop deployment and review** |
 | 2 | BLOCKED | Missing, unreadable, incomplete or malformed input: **stop deployment and review** |
 
-Diagnostic codes are `VERSION_MISMATCH`, `NAME_MISMATCH`, `LOCAL_ONLY`, `REMOTE_ONLY`, `AMBIGUOUS_ALIAS`, `DUPLICATE_LOCAL_VERSION`, `DUPLICATE_REMOTE_VERSION`, `INVALID_LOCAL_FILENAME`, `EMPTY_LOCAL_INVENTORY`, `INVALID_SNAPSHOT`, `INCOMPLETE_INVENTORY`, `LOCAL_READ_ERROR` and `SNAPSHOT_READ_ERROR`. JSON output contains only sanitized migration metadata, counts and codes. A remote name that matches a local name or embeds a local timestamp is a *suspected* alias, never evidence that migration SQL was applied.
+Diagnostic codes are `VERSION_MISMATCH`, `NAME_MISMATCH`, `REMOTE_NAME_MISSING`, `LOCAL_ONLY`, `REMOTE_ONLY`, `AMBIGUOUS_ALIAS`, `DUPLICATE_LOCAL_VERSION`, `DUPLICATE_REMOTE_VERSION`, `INVALID_LOCAL_FILENAME`, `EMPTY_LOCAL_INVENTORY`, `INVALID_SNAPSHOT`, `INCOMPLETE_INVENTORY`, `LOCAL_READ_ERROR` and `SNAPSHOT_READ_ERROR`. JSON output contains only sanitized migration metadata, counts and codes. A remote name that matches a local name or embeds a local timestamp is a *suspected* alias, never evidence that migration SQL was applied.
 
 The regression suite covers the six Focus V1 alias examples in #55 and a pre-V1 owner-policy migration with a changed remote version. It also covers exact parity, unexpected versions, duplicate identifiers, ambiguous names, malformed/incomplete input and CLI exit codes.
+
+## Capture schema evidence
+
+Run the [schema evidence query](../scripts/sql/export-focus-schema-evidence.sql)
+against the intended project and against a disposable PostgreSQL replay of the
+pinned migration set. Save the results outside Git. Compare by kind, schema,
+object and member. The query covers public relations and routines, plus the
+`auth.users` triggers and related catalog entries. It records table privileges
+for the two client roles, row-level security, policies, indexes, constraints and
+columns without selecting application rows.
+
+Definition hashes depend on PostgreSQL's rendering of an object. Compare on the
+same PostgreSQL major version and review differences against the relevant
+migration and follow-up migrations. Equal hashes help confirm specific
+definitions. Review data changes and effective access separately. Only an
+operator with access to the intended hosted project can establish hosted
+evidence.
 
 ## Mandatory pre-release procedure (separate authorization)
 
