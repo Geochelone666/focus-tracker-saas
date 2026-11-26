@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/supabase/server';
-import { liveCalendarPreview, type CalendarRead, type PreviewWindow } from '@/lib/smart-scheduler/live-preview';
+import { CalendarPreviewError, liveCalendarPreview, type CalendarRead, type PreviewWindow } from '@/lib/smart-scheduler/live-preview';
 import { validateId } from '@/lib/validation';
 import { wallTimeInstants } from '@/lib/wall-time';
 import { validDate } from '@/lib/calendar';
@@ -37,7 +37,10 @@ export async function generateCalendarPreview(window:PreviewWindow){
     if(!data.work_preferences||data.work_preferences.start!==window.start||data.work_preferences.end!==window.end)
       return calendarFailure('conflict','Save your work hours before generating a preview. If another device changed them, reload to see the saved hours.');
     try{return {preview:liveCalendarPreview(data as CalendarRead,user.id,window)};}
-    catch(error){return calendarFailure('invalid',error instanceof Error?error.message:'Choose a valid planning window.');}
+    catch(error){
+      if(error instanceof CalendarPreviewError)return calendarFailure(error.code,error.message);
+      return calendarFailure('retry','Calendar preview could not be generated. Please retry.');
+    }
   }catch(error){return interruptedCalendarAction(error);}
 }
 export type CalendarSelection={

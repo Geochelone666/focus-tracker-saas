@@ -111,3 +111,16 @@ it('keeps staging transport failures retryable after valid input conversion', as
   expect(await stageCalendarSelection({...selection,changes:[{...selection.changes[0],time:'bad'}]})).toHaveProperty('errorCode','invalid');
   expect(mock.rpc).toHaveBeenCalledTimes(1);
 });
+
+it('reports active focus as a conflict and hides unexpected preview exceptions',async()=>{
+  const data={user_id:id,captured_at:'2027-06-15T08:00:00Z',timezone:'UTC',revision:'0',
+    version_id:null,undo_receipt_id:null,has_active_focus:true,schedules:[],accepted_ids:[],locked_ids:[],
+    work_preferences:{start:'09:00',end:'17:00',revision:'1'}};
+  const window={date:'2027-06-15',days:1,start:'09:00',end:'17:00'};
+  mock.rpc.mockResolvedValue({data,error:null});
+  expect(await generateCalendarPreview(window)).toMatchObject({errorCode:'conflict',error:expect.stringMatching(/active focus/)});
+  mock.rpc.mockResolvedValue({data:{...data,has_active_focus:false,timezone:'private-invalid-zone'},error:null});
+  const result=await generateCalendarPreview(window);
+  expect(result).toHaveProperty('errorCode','retry');
+  expect(result).not.toHaveProperty('error',expect.stringContaining('private'));
+});

@@ -2,6 +2,16 @@ import { addDays } from '../planning';
 import { validDate } from '../calendar';
 import { wallTimeInstants } from '../wall-time';
 import { previewSmartCalendar, type FocusScheduleRow, type SmartCalendarSnapshotV01 } from './focus-adapter';
+export class CalendarPreviewError extends Error {
+  constructor(
+    readonly code: 'invalid' | 'conflict' | 'unavailable',
+    message: string
+  ) {
+    super(message);
+    this.name = 'CalendarPreviewError';
+  }
+}
+
 export type CalendarRead = {
   user_id:string; captured_at:string; timezone:string; revision:string;
   version_id:string|null; undo_receipt_id:string|null; has_active_focus:boolean;
@@ -11,16 +21,16 @@ export type CalendarRead = {
 export type WorkPreferences={start:string;end:string;revision:string};
 export type PreviewWindow = {date:string; days:number; start:string; end:string};
 export function liveCalendarPreview(read:CalendarRead, owner:string, window:PreviewWindow) {
-  if(read.user_id!==owner)throw new Error('Calendar owner mismatch.');
-  if(read.schedules.some(row=>row.user_id!==owner))throw new Error('Calendar owner mismatch.');
-  if(read.schedules.length>500)throw new Error('This preview supports up to 500 open tasks. Complete or archive tasks first.');
-  if(read.has_active_focus)throw new Error('Finish or abandon your active focus session before planning.');
+  if(read.user_id!==owner)throw new CalendarPreviewError('unavailable', 'Calendar preview is unavailable for your account.');
+  if(read.schedules.some(row=>row.user_id!==owner))throw new CalendarPreviewError('unavailable', 'Calendar preview is unavailable for your account.');
+  if(read.schedules.length>500)throw new CalendarPreviewError('invalid', 'This preview supports up to 500 open tasks. Complete or archive tasks first.');
+  if(read.has_active_focus)throw new CalendarPreviewError('conflict', 'Finish or abandon your active focus session before planning.');
   if(!validDate(window.date)||window.date<'0002-01-01'||window.date>'9998-01-01'||!Number.isInteger(window.days)||window.days<1||window.days>14||
     !/^([01]\d|2[0-3]):[0-5]\d$/.test(window.start)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(window.end)||window.start>=window.end)
-    throw new Error('Choose 1–14 days and a work window ending after it starts.');
+    throw new CalendarPreviewError('invalid', 'Choose 1–14 days and a work window ending after it starts.');
   const instant=(day:string,time:string)=>{
     const value=wallTimeInstants(day,time,read.timezone).at(-1);
-    if(value===undefined)throw new Error('A selected time does not exist in your timezone. Choose another work window.');
+    if(value===undefined)throw new CalendarPreviewError('invalid', 'A selected time does not exist in your timezone. Choose another work window.');
     return value;
   };
   const availability=Array.from({length:window.days},(_,i)=>{
