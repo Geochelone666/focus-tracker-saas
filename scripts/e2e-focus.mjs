@@ -122,7 +122,7 @@ try {
   const first=await browser.newContext(),second=await browser.newContext();
   await first.addCookies([cookie]);await second.addCookies([cookie]);
   let a=await first.newPage();const b=await second.newPage();
-  const errors=[];for(const page of [a,b])page.on('pageerror',error=>errors.push(error.message));
+  const errors=[];for(const page of [a,b])page.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error at',page.url(),error.message);});
   await Promise.all([a.goto(base+'/dashboard'),b.goto(base+'/dashboard')]);
   await Promise.all([a.getByRole('button',{name:'Start Session',exact:true}).click(),b.getByRole('button',{name:'Start Session',exact:true}).click()]);
   await waitFor(async()=>(await rows()).length===1,'Two starts must create exactly one session');
@@ -135,7 +135,7 @@ try {
   await a.waitForTimeout(1100);assert.equal(await a.getByRole('timer').innerText(),frozen,'Ten browser-clock minutes while paused do not accrue');
   assert.equal(Number((await rows())[0].accumulated_ms),Number(paused.accumulated_ms));
   // Keep the clock simulation isolated from subsequent framework scheduling.
-  await a.close();a=await first.newPage();a.on('pageerror',error=>errors.push(error.message));await a.goto(base+'/dashboard');
+  await a.close();a=await first.newPage();a.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error at',a.url(),error.message);});await a.goto(base+'/dashboard');
   await a.getByRole('button',{name:'Resume focus',exact:true}).click();await a.getByRole('button',{name:'Pause focus',exact:true}).waitFor();
   await b.reload(); // Both devices now hold the same running revision.
   await a.getByRole('button',{name:'Pause focus',exact:true}).click();await a.getByRole('button',{name:'Resume focus',exact:true}).waitFor();
