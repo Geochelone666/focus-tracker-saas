@@ -1,4 +1,4 @@
-# Focus 2 roadmap status — 2026-11-11
+# Focus 2 roadmap status — 2026-11-27
 
 The supplied roadmap is staged by acceptance evidence. This is a status ledger,
 not a claim that implementation or synthetic tests complete the whole roadmap.
@@ -8,18 +8,42 @@ trial, privacy, mobile and public-release work; it is separate from the source.
 
 | Phase | Current evidence | Remaining completion prerequisites |
 |---|---|---|
-| 0: safety/integration | Integrated code, 567 unit/action tests, migrated SQL, real PostgreSQL connection races, fixture browser workflow, offline preflight | Exact-head GitHub CI/Preview, complete hosted registry/schema evidence, two real GoTrue identities, independent contract/security/design agreement |
+| 0: safety/integration | Integrated application at `9649759`, 612 unit/action tests in 58 files, SQL migration regressions, real PostgreSQL concurrency, fixture browser workflow, exact-commit GitHub CI and Vercel Preview | Complete hosted registry/schema evidence for #55, two real GoTrue identities, independent contract/security/design agreement for #74 |
 | 1: usable Smart Calendar | Experimental real-data preview, selection/edit/confirm/reload/undo, day comparison, versioned locks, persisted work hours and draft metadata; default flag off | Resolve remaining protocol/authority gaps below, independent acceptance and hosted end-to-end verification |
 | 2: execution/plan feedback | Experimental calendar execution entry, unfinished/interrupted block review, saved remaining estimate/resume context, CAS edits, pagination and mobile browser workflow on `feat/f2-execution-recovery`; reuses V1 focus accounting | Automatic remaining-day suggestions, integration of remaining estimates into planning, and genuine user-journey acceptance; not release-accepted |
 | 3: personalization | Pure historical estimator/evaluation helpers and synthetic benchmarks exist | Authorized sufficient real pilot data, repeatable improvement over baseline; no production personalization enabled |
 | 4: external integrations | No Google/Outlook calendar connection delivered | OAuth application configuration, authorized test calendars, owner-isolated read-only sync/revocation testing; writeback remains separately opt-in |
 | 5: advanced planning/AI | Baseline deterministic scheduling and existing scoped AI/MCP entrypoints | Evidence-driven splitting/dependencies/capacity work after stable earlier stages; optional AI must not become a hard dependency |
-| 6: maturity | Existing web/mobile foundation and CSV; experimental paginated account JSON export with fixed projections and explicit read consistency; first workflow guide implemented | Hosted export and onboarding acceptance, account deletion/privacy, operational recovery and real-device acceptance; not delivered |
+| 6: maturity | Guided onboarding, CSV and experimental account JSON export, atomic connection revocation/reminder pause, confirmed password/email/TOTP account deletion with fixture coverage | Hosted onboarding/export/deletion acceptance, OTP template and delivery, OAuth identity linkage, additional MFA methods, backup recovery and real-device acceptance |
 
-## Fresh source inspection
+## Current candidate and release conditions
 
-Public GitHub HTML is readable even while the authenticated API proxy rejects
-requests. Issue [#74](https://github.com/Geochelone666/focus-tracker-saas/issues/74)
+`release/f2-candidate` assembles the verified application through
+[#98](https://github.com/Geochelone666/focus-tracker-saas/pull/98) for one review
+against `main`. The feature PRs retain their individual changes and test history.
+
+The source application commit `9649759` passed GitHub `ci`, `e2e`, `mobile`
+and `postgres-calendar`, plus Vercel Preview. The fixture browser run covered
+390px onboarding, schedule confirmation and undo, recovery, export, privacy
+controls and email/TOTP deletion. It included one-time email code consumption
+and a simulated lost deletion response. The offline preflight validated all
+39 local filenames. The hosted migration registry has not been read.
+
+| Release condition | Current evidence | Next required result |
+| --- | --- | --- |
+| #55 migration reconciliation | Read-only registry and schema queries in #87; complete disposable PostgreSQL replay and regressions | Intended project's complete registry and schema inventory, reviewed mapping and disposable reconciliation rehearsal |
+| #74 contract agreement | Mapping in #85; guarded writes, error categories and engine/oracle regressions | Independent agreement on version/provenance and fingerprint semantics, plus hosted two-user acceptance |
+| Hosted privacy | Mocked GoTrue boundaries and real fixture cascade deletion, including a preserved second account | Dedicated hosted test account, real OTP template/delivery and provider/MFA verification, actual backup/log retention |
+| Devices and operations | Chromium 390px workflow and mobile build/export checks | Physical-device receipt and recovery rehearsal |
+
+The Supabase browser session was still on its sign-in page during the
+2026-11-27 check. Vercel Preview build success is recorded separately from the
+authenticated application and hosted-schema acceptance above. Existing
+experimental switches retain their defaults in source.
+
+## Contract and hosted evidence
+
+GitHub API access is available. Issue [#74](https://github.com/Geochelone666/focus-tracker-saas/issues/74)
 is OPEN, labelled **INTERFACE BASELINE / NOT RELEASE-ACCEPTED** in its body. The
 algorithm [handoff](https://github.com/Geochelone666/focus-tracker-saas/issues/74#issuecomment-6620762535)
 and backend [handoff](https://github.com/Geochelone666/focus-tracker-saas/issues/74#issuecomment-6620792042)
@@ -49,19 +73,18 @@ Concrete remaining boundary work from that comparison:
 Issue [#55](https://github.com/Geochelone666/focus-tracker-saas/issues/55) is OPEN.
 Its handoff reports 25 main files and 17 remote registry rows with no exact version
 matches at inspection. This does not mean their SQL effects are absent. The
-[worksheet](f2-migration-worksheet.md) identifies all 33 current local files and
-keeps unknown mappings blocked. A complete sanitized registry and schema-only
+[worksheet](f2-migration-worksheet.md) records the earlier 33-file integration
+snapshot and keeps unknown mappings blocked. The current candidate contains
+39 migration files, including 14 additive SQL files relative to `main@442840b`. A complete sanitized registry and schema-only
 snapshot is needed before a reviewed disposable reconciliation rehearsal.
 
-## Initial delivery blocker
+## Historical delivery blocker
 
-The remote integration branch is preserved. GitHub API creation/read requests
-remain Forbidden at the proxy; Git transport and public HTML reads work. Supabase
-and Vercel tools and the test login bindings are absent from this execution
-session. No PR or CI outcome can be fabricated from the public issue pages.
-Do not enable the experimental feature or declare all phases complete to bypass
-these acceptance gates. Continue from this ledger when the required access,
-contract decisions and real evaluation inputs are available.
+The original cloud environment rejected GitHub API requests while Git transport
+and public HTML remained available. Local GitHub API access was restored on
+2026-11-14. The current stack has completed remote CI and Preview builds.
+Hosted Supabase metadata, real test-login bindings and independent acceptance
+remain outstanding.
 
 The independent [execution recovery increment](f2-execution-recovery.md) is stacked
 on that integration branch and kept behind its own default-off flag. Its additive
@@ -105,8 +128,8 @@ stay accessible. Requests and notifications already in flight may finish.
 
 Migration `20261126000000_privacy_access_controls.sql` brings the integrated
 migration set to 39 files. This increment completes connection controls within
-Phase 6A. Reauthenticated account deletion, backup retention verification and
-hosted privacy acceptance remain open.
+Phase 6A. Account deletion implementation is recorded below; backup retention
+verification and hosted privacy acceptance remain open.
 
 
 The [account deletion increment](f2-account-deletion.md) adds explicit confirmation,
