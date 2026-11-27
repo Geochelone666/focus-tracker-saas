@@ -33,6 +33,8 @@ const jwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenti
 const safe = value => { if(!/^[a-z_][a-z_0-9]*$/.test(value)) throw new Error('Unsupported fixture identifier');return `"${value}"`; };
 const operations=[];
 let failAccountExport=false;
+let deletedFixtureOwner=false;
+let fixtureDeletionCalls=0;
 const server=createServer(async(req,res)=>{
   const began=Date.now(),path=new URL(req.url,"http://fixture").pathname;operations.push(`start ${req.method} ${path}`);
   res.on("finish",()=>operations.push(`done ${req.method} ${path}: ${res.statusCode} (${Date.now()-began}ms)`));
@@ -41,8 +43,32 @@ const server=createServer(async(req,res)=>{
     let text='';for await(const part of req) text+=part;
     const body=text?JSON.parse(text):null;
     let output;
-    if(url.pathname==='/auth/v1/user') {
-      if(req.headers.authorization!==`Bearer ${jwt}`){res.writeHead(401,{'content-type':'application/json'});res.end(JSON.stringify({message:'Invalid fixture session'}));return;}
+    if(url.pathname==='/auth/v1/token' && url.searchParams.get('grant_type')==='password') {
+      if(body.email!==user.email || body.password!=='delete-fixture-password' || deletedFixtureOwner){
+        res.writeHead(400,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'invalid_credentials',msg:'Invalid fixture credentials'}));return;
+      }
+      output={access_token:jwt,refresh_token:'delete-fixture-refresh',expires_in:3600,token_type:'bearer',user};
+    } else if(url.pathname==='/auth/v1/logout') {
+      output={};
+    } else if(url.pathname==='/auth/v1/admin/users/'+owner) {
+      if(req.headers.authorization!=='Bearer fixture-admin-key')throw new Error('Fixture admin authorization required');
+      if(req.method==='DELETE'){
+        assert.equal(body.should_soft_delete,false);
+        fixtureDeletionCalls++;
+        await serial(()=>db.query('delete from auth.users where id=$1',[owner]));
+        deletedFixtureOwner=true;
+        // Deliberately lose the successful response. The action must verify absence.
+        res.writeHead(500,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'unexpected_failure',msg:'Fixture interrupted deletion response'}));return;
+      }
+      if(deletedFixtureOwner){
+        res.writeHead(404,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'user_not_found',msg:'Fixture user not found'}));return;
+      }
+      output={user};
+    } else if(url.pathname==='/auth/v1/user') {
+      if(deletedFixtureOwner||req.headers.authorization!==`Bearer ${jwt}`){res.writeHead(401,{'content-type':'application/json'});res.end(JSON.stringify({message:'Invalid fixture session'}));return;}
       output=user;
     } else {
       if(req.headers.authorization!==`Bearer ${jwt}`) throw new Error('Fixture requires authenticated session');
@@ -105,7 +131,7 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(fixturePort,'127.0.0.1',resolve));
 let logs='';
-const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',FOCUS_EXECUTION_RECOVERY_ENABLED:'true',FOCUS_DATA_EXPORT_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',FOCUS_EXECUTION_RECOVERY_ENABLED:'true',FOCUS_DATA_EXPORT_ENABLED:'true',SUPABASE_SERVICE_ROLE_KEY:'fixture-admin-key',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
 app.stdout.on('data',chunk=>{logs+=chunk;});app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 const rows=()=>serial(async()=>(await db.query('select * from public.focus_sessions order by created_at,id')).rows);
@@ -541,6 +567,24 @@ try {
   assert.equal((await serial(()=>db.query('select enabled from push_devices where id=$1',['b9200000-0000-4000-8000-000000000001']))).rows[0].enabled,false);
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Privacy overflow at 390px');
   console.log('PASS: confirmed owner privacy control revokes AI keys and pauses device reminders at 390px');
+  await a.goto(base+'/settings/privacy/delete');
+  const deleteForm=a.locator('form').filter({has:a.getByRole('button',{name:'Permanently delete my account',exact:true})});
+  await deleteForm.getByLabel('Current password',{exact:true}).fill('wrong-fixture-password');
+  await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
+  await deleteForm.getByRole('checkbox').check();
+  await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
+  await a.getByRole('alert').filter({hasText:'Could not verify your current password'}).waitFor();
+  assert.equal(fixtureDeletionCalls,0);
+  await deleteForm.getByLabel('Current password',{exact:true}).fill('delete-fixture-password');
+  await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
+  await deleteForm.getByRole('checkbox').check();
+  await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
+  await a.getByText('Your account and its Focus Tracker records have been deleted.',{exact:true}).waitFor();
+  assert.equal(fixtureDeletionCalls,1);
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from schedules where user_id=$1',[owner]))).rows[0].count,0);
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from push_devices where user_id=$1',[owner]))).rows[0].count,0);
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from integration_tokens where user_id=$1',[owner]))).rows[0].count,0);
+  console.log('PASS: wrong password rejected / confirmed fixture account deletion / cascades / lost response verified / signed out');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}

@@ -107,3 +107,10 @@ Migration `20261126000000_privacy_access_controls.sql` brings the integrated
 migration set to 39 files. This increment completes connection controls within
 Phase 6A. Reauthenticated account deletion, backup retention verification and
 hosted privacy acceptance remain open.
+
+
+The [account deletion increment](f2-account-deletion.md) adds explicit confirmation,
+password reauthentication, MFA assurance checks and server-only GoTrue deletion.
+Its SQL fixture checks cascades across every owned collection and preservation
+of a second account. It adds no migration. Hosted GoTrue, MFA challenge UX and
+backup-retention acceptance remain open.

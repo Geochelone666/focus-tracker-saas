@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — confirmed account deletion
+
+- Add a password-verified permanent account deletion form with explicit confirmation, export links and scope/retention information.
+- Derive the target from the authenticated session, require MFA assurance for enrolled accounts, and check deletion outcome after interrupted responses.
+- Reuse existing cascades and server configuration. Hosted authentication and backup-retention acceptance remain pending. See [account deletion](docs/f2-account-deletion.md).
+
+
 ## Unreleased — privacy access controls
 
 - Add Settings → Privacy and access, with account export and connection-management links.
