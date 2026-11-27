@@ -30,12 +30,6 @@ export async function deleteAccount(
     return { error: 'Account deletion is currently unavailable. Please contact the app administrator.' };
   }
   try {
-    if (user.factors?.some(factor => factor.status === 'verified')) {
-      const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (error || data?.currentLevel !== 'aal2') {
-        return { error: 'Complete multi-factor sign-in before deleting your account.' };
-      }
-    }
     const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
     const verifier = supabaseClient(
       getRequiredEnvVar('NEXT_PUBLIC_SUPABASE_URL'),
@@ -46,12 +40,37 @@ export async function deleteAccount(
     try {
       const { data, error } = await verifier.auth.signInWithPassword({ email: user.email, password });
       verified = !error && data.user?.id === user.id && Boolean(data.session);
+      if (!verified) return { error: 'Could not verify your current password. Please try again.' };
+
+      const factors = data.user?.factors?.filter(factor => factor.status === 'verified') ?? [];
+      const authenticators = factors.filter(factor => factor.factor_type === 'totp');
+      if (authenticators.length) {
+        const selected = form.get('factor_id');
+        const factor = selected === null && authenticators.length === 1
+          ? authenticators[0]
+          : authenticators.find(item => item.id === selected);
+        const code = form.get('totp_code');
+        if (!factor || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+          return { error: 'Choose your authenticator and enter its current six-digit code.' };
+        }
+        const challenge = await verifier.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+        if (challenge.error) return { error: 'Could not verify the authenticator code. Enter a new code and retry.' };
+        const assurance = await verifier.auth.mfa.getAuthenticatorAssuranceLevel();
+        const identity = await verifier.auth.getUser();
+        if (assurance.error || assurance.data?.currentLevel !== 'aal2' ||
+            identity.error || identity.data.user?.id !== user.id) {
+          return { error: 'Multi-factor verification could not be confirmed. Please retry.' };
+        }
+      } else if (factors.length) {
+        const { data: assurance, error: assuranceError } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (assuranceError || assurance?.currentLevel !== 'aal2') {
+          return { error: 'Complete multi-factor sign-in before deleting your account.' };
+        }
+      }
     } finally {
       // This independent client never writes browser session cookies.
       try { await verifier.auth.signOut({ scope: 'local' }); } catch {}
     }
-    if (!verified) return { error: 'Could not verify your current password. Please try again.' };
-
     const admin = supabaseClient(
       getRequiredEnvVar('NEXT_PUBLIC_SUPABASE_URL'),
       getRequiredEnvVar('SUPABASE_SERVICE_ROLE_KEY'),

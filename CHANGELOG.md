@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — account deletion authenticator verification
+
+- Let password accounts choose an enrolled authenticator and enter a current TOTP code before deletion.
+- Verify the factor on an isolated reauthentication session, then confirm AAL2 and the same owner before invoking deletion.
+- Preserve elevated-session support for other MFA methods. Hosted authenticator acceptance remains pending.
+
+
 ## Unreleased — confirmed account deletion
 
 - Add a password-verified permanent account deletion form with explicit confirmation, export links and scope/retention information.
