@@ -3,13 +3,13 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({
   sessionClient: vi.fn(), newClient: vi.fn(), getUser: vi.fn(), assurance: vi.fn(),
   verify: vi.fn(), verifySignOut: vi.fn(), deleteUser: vi.fn(), getUserById: vi.fn(),
-  signOut: vi.fn(), challenge: vi.fn(), verifierAssurance: vi.fn(), verifiedUser: vi.fn(),
+  sendOtp: vi.fn(), verifyOtp: vi.fn(), signOut: vi.fn(), challenge: vi.fn(), verifierAssurance: vi.fn(), verifiedUser: vi.fn(),
 }));
 vi.mock('@/supabase/server', () => ({ createClient: mock.sessionClient }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: mock.newClient }));
 vi.mock('@/lib/env', () => ({ getRequiredEnvVar: (name: string) => process.env[name] }));
 vi.mock('next/navigation', () => ({ redirect: (url: string) => { throw new Error('redirect:' + url); } }));
-import { deleteAccount } from './actions';
+import { deleteAccount, sendDeletionCode } from './actions';
 
 const owner = { id: 'owner', email: 'owner@example.invalid', factors: [] };
 function form() {
@@ -34,12 +34,14 @@ beforeEach(() => {
   } });
   mock.newClient.mockImplementation((_url, key) => key === 'fixture-admin'
     ? { auth: { admin: { deleteUser: mock.deleteUser, getUserById: mock.getUserById } } }
-    : { auth: { signInWithPassword: mock.verify, signOut: mock.verifySignOut,
+    : { auth: { signInWithPassword: mock.verify, signInWithOtp: mock.sendOtp, verifyOtp: mock.verifyOtp, signOut: mock.verifySignOut,
       getUser: mock.verifiedUser, mfa: {
         challengeAndVerify: mock.challenge, getAuthenticatorAssuranceLevel: mock.verifierAssurance,
       } } });
   mock.verify.mockResolvedValue({ data: { user: owner, session: { access_token: 'fixture' } }, error: null });
   mock.deleteUser.mockResolvedValue({ error: null });
+  mock.sendOtp.mockResolvedValue({ error: null });
+  mock.verifyOtp.mockResolvedValue({ data: { user: owner, session: { access_token: 'fixture' } }, error: null });
   mock.challenge.mockResolvedValue({ error: null });
   mock.verifierAssurance.mockResolvedValue({ data: { currentLevel: 'aal2' }, error: null });
   mock.verifiedUser.mockResolvedValue({ data: { user: owner }, error: null });
@@ -146,4 +148,54 @@ it('does not delete after a rejected code, low assurance or changed verified ide
   expect(await deleteAccount({}, totpForm())).toHaveProperty('error');
   expect(mock.deleteUser).not.toHaveBeenCalled();
   expect(mock.verifySignOut).toHaveBeenCalledTimes(3);
+});
+
+function emailForm() {
+  const value = form();
+  value.delete('password');
+  value.set('verification_method', 'email');
+  value.set('email_code', '654321');
+  return value;
+}
+it('sends a code only to the verified owner and disables automatic signup', async () => {
+  expect(await sendDeletionCode()).toHaveProperty('success');
+  expect(mock.sendOtp).toHaveBeenCalledWith({email:owner.email,options:{shouldCreateUser:false}});
+  expect(mock.deleteUser).not.toHaveBeenCalled();
+  mock.getUser.mockResolvedValueOnce({data:{user:null},error:null});
+  expect(await sendDeletionCode()).toHaveProperty('error');
+  expect(mock.sendOtp).toHaveBeenCalledTimes(1);
+});
+it('keeps code delivery failures retryable without forwarding provider details', async () => {
+  mock.sendOtp.mockResolvedValueOnce({error:{message:'private provider detail'}});
+  const result=await sendDeletionCode();
+  expect(result.error).toMatch(/retry/);
+  expect(result.error).not.toContain('private');
+  mock.sendOtp.mockRejectedValueOnce(new Error('private transport'));
+  expect(await sendDeletionCode()).toHaveProperty('error');
+});
+it('verifies an OAuth-only owner through email without requiring a password', async () => {
+  await expect(deleteAccount({}, emailForm())).rejects.toThrow('redirect:/login?message=');
+  expect(mock.verify).not.toHaveBeenCalled();
+  expect(mock.verifyOtp).toHaveBeenCalledWith({email:owner.email,token:'654321',type:'email'});
+  expect(mock.deleteUser).toHaveBeenCalledWith('owner',false);
+  expect(mock.verifySignOut).toHaveBeenCalledWith({scope:'local'});
+});
+it('rejects invalid email codes and mismatched identities before deletion', async () => {
+  const invalid=emailForm(); invalid.set('email_code','bad');
+  expect(await deleteAccount({},invalid)).toHaveProperty('error');
+  expect(mock.verifyOtp).not.toHaveBeenCalled();
+  mock.verifyOtp.mockResolvedValueOnce({data:{user:{id:'foreign'},session:{}},error:null});
+  expect(await deleteAccount({},emailForm())).toHaveProperty('error');
+  mock.verifyOtp.mockResolvedValueOnce({data:{user:null,session:null},error:{message:'private code detail'}});
+  const result=await deleteAccount({},emailForm());
+  expect(result.error).not.toContain('private');
+  expect(mock.deleteUser).not.toHaveBeenCalled();
+});
+it('requires the owned authenticator after successful email verification', async () => {
+  mock.verifyOtp.mockResolvedValue({data:{user:totpOwner,session:{}},error:null});
+  expect(await deleteAccount({},emailForm())).toHaveProperty('error',expect.stringContaining('Request a new email code'));
+  expect(mock.deleteUser).not.toHaveBeenCalled();
+  const value=emailForm(); value.set('factor_id','owned-factor'); value.set('totp_code','123456');
+  await expect(deleteAccount({},value)).rejects.toThrow('redirect:/login?message=');
+  expect(mock.challenge).toHaveBeenCalledWith({factorId:'owned-factor',code:'123456'});
 });

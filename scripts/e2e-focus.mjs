@@ -33,6 +33,8 @@ const jwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenti
 const fixtureFactor='bc000000-0000-4000-8000-000000000001';
 const mfaJwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenticated',aal:'aal2',exp:Math.floor(Date.now()/1000)+86400},'fixture-signature'].map((v,i)=>i===2?Buffer.from(v).toString('base64url'):Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
 let fixtureMfaChallenges=0;
+let fixtureDeletionCodes=0;
+let fixtureEmailCodeUsed=false;
 const safe = value => { if(!/^[a-z_][a-z_0-9]*$/.test(value)) throw new Error('Unsupported fixture identifier');return `"${value}"`; };
 const operations=[];
 let failAccountExport=false;
@@ -46,7 +48,22 @@ const server=createServer(async(req,res)=>{
     let text='';for await(const part of req) text+=part;
     const body=text?JSON.parse(text):null;
     let output;
-    if(url.pathname==='/auth/v1/token' && url.searchParams.get('grant_type')==='password') {
+    if(url.pathname==='/auth/v1/otp') {
+      assert.equal(body.email,user.email);
+      assert.equal(body.create_user,false);
+      fixtureDeletionCodes++;
+      fixtureEmailCodeUsed=false;
+      output={};
+    } else if(url.pathname==='/auth/v1/verify') {
+      assert.equal(body.email,user.email);
+      assert.equal(body.type,'email');
+      if(body.token!=='654321' || fixtureEmailCodeUsed || deletedFixtureOwner){
+        res.writeHead(403,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'otp_expired',msg:'Fixture invalid email code'}));return;
+      }
+      fixtureEmailCodeUsed=true;
+      output={access_token:jwt,refresh_token:'fixture-email-refresh',expires_in:3600,token_type:'bearer',user};
+    } else if(url.pathname==='/auth/v1/token' && url.searchParams.get('grant_type')==='password') {
       if(body.email!==user.email || body.password!=='delete-fixture-password' || deletedFixtureOwner){
         res.writeHead(400,{'content-type':'application/json'});
         res.end(JSON.stringify({error_code:'invalid_credentials',msg:'Invalid fixture credentials'}));return;
@@ -592,14 +609,32 @@ try {
   await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
   await a.getByRole('alert').filter({hasText:'Could not verify your current password'}).waitFor();
   assert.equal(fixtureDeletionCalls,0);
-  await deleteForm.getByLabel('Current password',{exact:true}).fill('delete-fixture-password');
+  user.app_metadata={provider:'google',providers:['google']};
+  await a.getByLabel('Verify with',{exact:true}).selectOption('email');
+  await deleteForm.getByRole('button',{name:'Send verification code',exact:true}).click();
+  await deleteForm.getByRole('status').filter({hasText:'Check your account email'}).waitFor();
+  assert.equal(fixtureDeletionCodes,1);
+  await deleteForm.getByLabel('Email verification code',{exact:true}).fill('000000');
+  await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('000000');
+  await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
+  await deleteForm.getByRole('checkbox').check();
+  await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
+  await a.getByRole('alert').filter({hasText:'Could not verify the email code'}).waitFor();
+  assert.equal(await a.getByLabel('Verify with',{exact:true}).inputValue(),'email');
+  assert.equal(await deleteForm.locator('input[name="verification_method"]').inputValue(),'email');
+  assert.equal(fixtureDeletionCalls,0);
+  await deleteForm.getByLabel('Email verification code',{exact:true}).fill('654321');
   await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('000000');
   await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
   await deleteForm.getByRole('checkbox').check();
   await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
   await a.getByRole('alert').filter({hasText:'Could not verify the authenticator code'}).waitFor();
   assert.equal(fixtureDeletionCalls,0);
-  await deleteForm.getByLabel('Current password',{exact:true}).fill('delete-fixture-password');
+  await a.getByRole('alert').filter({hasText:'Request a new email code'}).waitFor();
+  await deleteForm.getByRole('button',{name:'Send verification code',exact:true}).click();
+  await deleteForm.getByRole('status').filter({hasText:'Check your account email'}).waitFor();
+  await waitFor(async()=>fixtureDeletionCodes===2,'A consumed email code must be replaced');
+  await deleteForm.getByLabel('Email verification code',{exact:true}).fill('654321');
   await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('123456');
   await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
   await deleteForm.getByRole('checkbox').check();
@@ -610,7 +645,7 @@ try {
   assert.equal((await serial(()=>db.query('select count(*)::int as count from schedules where user_id=$1',[owner]))).rows[0].count,0);
   assert.equal((await serial(()=>db.query('select count(*)::int as count from push_devices where user_id=$1',[owner]))).rows[0].count,0);
   assert.equal((await serial(()=>db.query('select count(*)::int as count from integration_tokens where user_id=$1',[owner]))).rows[0].count,0);
-  console.log('PASS: wrong password and TOTP rejected / owned authenticator verified / confirmed fixture account deletion / cascades / lost response verified / signed out');
+  console.log('PASS: wrong password and email code rejected / email reauthentication / owned authenticator verified / confirmed fixture account deletion / cascades / lost response verified / signed out');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}
