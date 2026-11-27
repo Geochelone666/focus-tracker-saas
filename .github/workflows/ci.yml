@@ -43,6 +43,9 @@ jobs:
       - name: Test migration preflight (offline fixtures)
         run: node --test scripts/migration-drift-preflight.node-tests.mjs
 
+      - name: Test hosted owner-isolation checker (offline fixtures)
+        run: node --test scripts/hosted-owner-isolation.node-tests.mjs
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 

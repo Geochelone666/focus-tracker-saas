@@ -21,3 +21,8 @@ and [the concurrency harness](../scripts/postgres-calendar-concurrency.mjs).
 The review still needs independent agreement on the open mappings above, an
 exact-head browser and PostgreSQL result, two hosted test identities, and the
 migration reconciliation in [issue #55](https://github.com/Geochelone666/focus-tracker-saas/issues/55).
+
+The [hosted identity/read-isolation checker](hosted-owner-isolation.md) can
+collect the two-session SELECT evidence without writes. Its offline fixtures
+do not establish hosted acceptance; calendar writes and undo still require
+their own dedicated-account validation.
