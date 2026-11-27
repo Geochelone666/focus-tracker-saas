@@ -1,0 +1,104 @@
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+
+const mock = vi.hoisted(() => ({
+  sessionClient: vi.fn(), newClient: vi.fn(), getUser: vi.fn(), assurance: vi.fn(),
+  verify: vi.fn(), verifySignOut: vi.fn(), deleteUser: vi.fn(), getUserById: vi.fn(),
+  signOut: vi.fn(),
+}));
+vi.mock('@/supabase/server', () => ({ createClient: mock.sessionClient }));
+vi.mock('@supabase/supabase-js', () => ({ createClient: mock.newClient }));
+vi.mock('@/lib/env', () => ({ getRequiredEnvVar: (name: string) => process.env[name] }));
+vi.mock('next/navigation', () => ({ redirect: (url: string) => { throw new Error('redirect:' + url); } }));
+import { deleteAccount } from './actions';
+
+const owner = { id: 'owner', email: 'owner@example.invalid', factors: [] };
+function form() {
+  const value = new FormData();
+  value.set('password', 'fixture-password');
+  value.set('confirmation', 'DELETE');
+  value.set('understand', 'yes');
+  value.set('user_id', 'foreign');
+  value.set('email', 'foreign@example.invalid');
+  return value;
+}
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'fixture-anon');
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fixture-admin');
+  mock.getUser.mockResolvedValue({ data: { user: owner }, error: null });
+  mock.assurance.mockResolvedValue({ data: { currentLevel: 'aal2' }, error: null });
+  mock.sessionClient.mockResolvedValue({ auth: {
+    getUser: mock.getUser, signOut: mock.signOut,
+    mfa: { getAuthenticatorAssuranceLevel: mock.assurance },
+  } });
+  mock.newClient.mockImplementation((_url, key) => key === 'fixture-admin'
+    ? { auth: { admin: { deleteUser: mock.deleteUser, getUserById: mock.getUserById } } }
+    : { auth: { signInWithPassword: mock.verify, signOut: mock.verifySignOut } });
+  mock.verify.mockResolvedValue({ data: { user: owner, session: { access_token: 'fixture' } }, error: null });
+  mock.deleteUser.mockResolvedValue({ error: null });
+});
+afterEach(() => vi.unstubAllEnvs());
+
+it('requires explicit permanent confirmation before any authentication or deletion', async () => {
+  expect(await deleteAccount({}, new FormData())).toHaveProperty('error');
+  expect(mock.sessionClient).not.toHaveBeenCalled();
+  const value = form(); value.set('confirmation', 'delete');
+  expect(await deleteAccount({}, value)).toHaveProperty('error');
+  expect(mock.newClient).not.toHaveBeenCalled();
+});
+it('reauthenticates the server owner and deletes that ID, ignoring client ownership fields', async () => {
+  await expect(deleteAccount({}, form())).rejects.toThrow('redirect:/login?message=');
+  expect(mock.verify).toHaveBeenCalledWith({ email: owner.email, password: 'fixture-password' });
+  expect(mock.deleteUser).toHaveBeenCalledExactlyOnceWith('owner', false);
+  expect(mock.getUserById).not.toHaveBeenCalled();
+  expect(mock.verifySignOut).toHaveBeenCalledWith({ scope: 'local' });
+  expect(mock.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  expect(mock.newClient.mock.calls[0][2]).toMatchObject({ auth: { persistSession: false } });
+});
+it('blocks missing identity, missing configuration and wrong-password identity mismatches', async () => {
+  mock.getUser.mockResolvedValueOnce({ data: { user: null }, error: null });
+  expect(await deleteAccount({}, form())).toHaveProperty('error');
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+  expect(await deleteAccount({}, form())).toHaveProperty('error');
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fixture-admin');
+  mock.verify.mockResolvedValueOnce({ data: { user: { id: 'foreign' }, session: {} }, error: null });
+  expect(await deleteAccount({}, form())).toHaveProperty('error');
+  mock.verify.mockResolvedValueOnce({ data: { user: null, session: null }, error: { message: 'private' } });
+  const result = await deleteAccount({}, form());
+  expect(result.error).not.toContain('private');
+  expect(mock.deleteUser).not.toHaveBeenCalled();
+});
+it('requires an elevated session for an account with verified MFA', async () => {
+  mock.getUser.mockResolvedValue({ data: { user: { ...owner, factors: [{ status: 'verified' }] } }, error: null });
+  mock.assurance.mockResolvedValueOnce({ data: { currentLevel: 'aal1' }, error: null });
+  expect(await deleteAccount({}, form())).toHaveProperty('error');
+  expect(mock.verify).not.toHaveBeenCalled();
+  await expect(deleteAccount({}, form())).rejects.toThrow('redirect:/login?message=');
+});
+it('checks an interrupted deletion and succeeds only on a verified missing owner', async () => {
+  mock.deleteUser.mockRejectedValueOnce(new Error('private transport details'));
+  mock.getUserById.mockResolvedValueOnce({ data: { user: null }, error: { status: 404, code: 'user_not_found' } });
+  await expect(deleteAccount({}, form())).rejects.toThrow('redirect:/login?message=');
+  expect(mock.getUserById).toHaveBeenCalledWith('owner');
+});
+it('retains retry feedback for an existing owner, denied access or an uncertain read', async () => {
+  mock.deleteUser.mockResolvedValue({ error: { status: 500, message: 'private SQL' } });
+  mock.getUserById.mockResolvedValueOnce({ data: { user: owner }, error: null });
+  expect(await deleteAccount({}, form())).toHaveProperty('error');
+  mock.getUserById.mockResolvedValueOnce({ data: { user: null }, error: { status: 404, code: 'other_error' } });
+  expect(await deleteAccount({}, form())).toHaveProperty('error');
+  mock.getUserById.mockRejectedValueOnce(new Error('private network'));
+  const result = await deleteAccount({}, form());
+  expect(result.error).toMatch(/could not be confirmed/);
+  expect(result.error).not.toContain('private');
+  expect(mock.signOut).not.toHaveBeenCalled();
+});
+
+it('keeps an authentication transport failure recoverable before creating privileged clients', async () => {
+  mock.getUser.mockRejectedValueOnce(new Error('private transport'));
+  const result = await deleteAccount({}, form());
+  expect(result.error).toMatch(/Please retry/);
+  expect(result.error).not.toContain('private');
+  expect(mock.newClient).not.toHaveBeenCalled();
+});

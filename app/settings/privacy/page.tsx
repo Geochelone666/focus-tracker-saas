@@ -21,6 +21,7 @@ export default async function PrivacyPage() {
         <p>Requests already running and notifications already sent may finish. Your tasks and focus records stay available, and you stay signed in.</p>
         <PrivacyAccessForm />
       </section>
+      <p><Link href="/settings/privacy/delete" className="underline">Delete your account</Link></p>
       <div className="flex flex-wrap gap-4">
         <Link href="/settings/integrations" className="underline">Manage AI connections</Link>
         <Link href="/settings/notifications" className="underline">Manage phone reminders</Link>
