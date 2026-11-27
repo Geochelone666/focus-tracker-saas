@@ -3,7 +3,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({
   sessionClient: vi.fn(), newClient: vi.fn(), getUser: vi.fn(), assurance: vi.fn(),
   verify: vi.fn(), verifySignOut: vi.fn(), deleteUser: vi.fn(), getUserById: vi.fn(),
-  signOut: vi.fn(),
+  signOut: vi.fn(), challenge: vi.fn(), verifierAssurance: vi.fn(), verifiedUser: vi.fn(),
 }));
 vi.mock('@/supabase/server', () => ({ createClient: mock.sessionClient }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: mock.newClient }));
@@ -34,9 +34,15 @@ beforeEach(() => {
   } });
   mock.newClient.mockImplementation((_url, key) => key === 'fixture-admin'
     ? { auth: { admin: { deleteUser: mock.deleteUser, getUserById: mock.getUserById } } }
-    : { auth: { signInWithPassword: mock.verify, signOut: mock.verifySignOut } });
+    : { auth: { signInWithPassword: mock.verify, signOut: mock.verifySignOut,
+      getUser: mock.verifiedUser, mfa: {
+        challengeAndVerify: mock.challenge, getAuthenticatorAssuranceLevel: mock.verifierAssurance,
+      } } });
   mock.verify.mockResolvedValue({ data: { user: owner, session: { access_token: 'fixture' } }, error: null });
   mock.deleteUser.mockResolvedValue({ error: null });
+  mock.challenge.mockResolvedValue({ error: null });
+  mock.verifierAssurance.mockResolvedValue({ data: { currentLevel: 'aal2' }, error: null });
+  mock.verifiedUser.mockResolvedValue({ data: { user: owner }, error: null });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -71,9 +77,10 @@ it('blocks missing identity, missing configuration and wrong-password identity m
 });
 it('requires an elevated session for an account with verified MFA', async () => {
   mock.getUser.mockResolvedValue({ data: { user: { ...owner, factors: [{ status: 'verified' }] } }, error: null });
+  mock.verify.mockResolvedValue({data:{user:{...owner,factors:[{status:'verified',factor_type:'phone'}]},session:{}},error:null});
   mock.assurance.mockResolvedValueOnce({ data: { currentLevel: 'aal1' }, error: null });
   expect(await deleteAccount({}, form())).toHaveProperty('error');
-  expect(mock.verify).not.toHaveBeenCalled();
+  expect(mock.deleteUser).not.toHaveBeenCalled();
   await expect(deleteAccount({}, form())).rejects.toThrow('redirect:/login?message=');
 });
 it('checks an interrupted deletion and succeeds only on a verified missing owner', async () => {
@@ -101,4 +108,42 @@ it('keeps an authentication transport failure recoverable before creating privil
   expect(result.error).toMatch(/Please retry/);
   expect(result.error).not.toContain('private');
   expect(mock.newClient).not.toHaveBeenCalled();
+});
+
+const totpOwner = { ...owner, factors: [{ id: 'owned-factor', status: 'verified', factor_type: 'totp' }] };
+function totpForm() {
+  const value = form();
+  value.set('factor_id', 'owned-factor');
+  value.set('totp_code', '123456');
+  return value;
+}
+it('requires a freshly confirmed owned TOTP factor even with an elevated original session', async () => {
+  mock.verify.mockResolvedValue({ data: { user: totpOwner, session: {} }, error: null });
+  await expect(deleteAccount({}, totpForm())).rejects.toThrow('redirect:/login?message=');
+  expect(mock.challenge).toHaveBeenCalledWith({ factorId: 'owned-factor', code: '123456' });
+  expect(mock.verifiedUser).toHaveBeenCalled();
+  expect(mock.verifySignOut).toHaveBeenCalledWith({ scope: 'local' });
+  expect(mock.deleteUser).toHaveBeenCalledWith('owner', false);
+});
+it('rejects foreign, unverified and malformed authenticator inputs before challenging', async () => {
+  mock.verify.mockResolvedValue({ data: { user: {...totpOwner,factors:[...totpOwner.factors,{id:'pending-factor',status:'unverified',factor_type:'totp'}]}, session: {} }, error: null });
+  const pending = totpForm(); pending.set('factor_id','pending-factor');
+  expect(await deleteAccount({}, pending)).toHaveProperty('error');
+  const foreign = totpForm(); foreign.set('factor_id','foreign-factor');
+  expect(await deleteAccount({}, foreign)).toHaveProperty('error');
+  const malformed = totpForm(); malformed.set('totp_code','12');
+  expect(await deleteAccount({}, malformed)).toHaveProperty('error');
+  expect(mock.challenge).not.toHaveBeenCalled();
+  expect(mock.deleteUser).not.toHaveBeenCalled();
+});
+it('does not delete after a rejected code, low assurance or changed verified identity', async () => {
+  mock.verify.mockResolvedValue({ data: { user: totpOwner, session: {} }, error: null });
+  mock.challenge.mockResolvedValueOnce({ error: { message: 'private MFA detail' } });
+  expect(await deleteAccount({}, totpForm())).toHaveProperty('error');
+  mock.verifierAssurance.mockResolvedValueOnce({ data: { currentLevel: 'aal1' }, error: null });
+  expect(await deleteAccount({}, totpForm())).toHaveProperty('error');
+  mock.verifiedUser.mockResolvedValueOnce({ data: { user: { id: 'foreign' } }, error: null });
+  expect(await deleteAccount({}, totpForm())).toHaveProperty('error');
+  expect(mock.deleteUser).not.toHaveBeenCalled();
+  expect(mock.verifySignOut).toHaveBeenCalledTimes(3);
 });

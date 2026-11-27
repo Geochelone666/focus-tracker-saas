@@ -112,5 +112,5 @@ hosted privacy acceptance remain open.
 The [account deletion increment](f2-account-deletion.md) adds explicit confirmation,
 password reauthentication, MFA assurance checks and server-only GoTrue deletion.
 Its SQL fixture checks cascades across every owned collection and preservation
-of a second account. It adds no migration. Hosted GoTrue, MFA challenge UX and
-backup-retention acceptance remain open.
+of a second account. It adds no migration. The deletion form now supports an owned TOTP authenticator challenge. Hosted
+GoTrue/TOTP, additional MFA methods and backup-retention acceptance remain open.
