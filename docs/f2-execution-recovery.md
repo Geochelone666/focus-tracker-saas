@@ -16,6 +16,11 @@ the range, including 23/25-hour days. Completed focus is summed across all
 sessions for each task; breaks and abandoned sessions are excluded. Missing
 history stays unknown. Completing focus never completes the task.
 
+The latest focus outcome excludes later short/long breaks. A task with only
+break history retains an unknown focus duration and no focus outcome. Paused
+session feedback covers both focus and linked breaks without calling a break
+an active focus period. Mixed-session SQL regressions protect these boundaries.
+
 The user can save an optional remaining estimate (1–1440 minutes) and a short
 resume note, return to an active/paused session, or follow the existing calendar
 and task editing flows to rearrange, postpone or complete work. Original task
