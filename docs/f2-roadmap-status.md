@@ -114,3 +114,10 @@ password reauthentication, MFA assurance checks and server-only GoTrue deletion.
 Its SQL fixture checks cascades across every owned collection and preservation
 of a second account. It adds no migration. The deletion form now supports an owned TOTP authenticator challenge. Hosted
 GoTrue/TOTP, additional MFA methods and backup-retention acceptance remain open.
+
+
+Account deletion also supports verification through the signed-in owner's email.
+The server disables signup, verifies the returned owner and retains the
+authenticator challenge. Local email fixtures cover sending, wrong codes and
+MFA. Hosted OTP template/delivery, provider linkage and additional MFA methods
+remain release prerequisites.

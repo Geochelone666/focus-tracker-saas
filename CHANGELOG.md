@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — email verification for account deletion
+
+- Add a verification-code alternative for signed-in accounts that use OAuth or prefer email confirmation.
+- Send only to the verified account email with automatic signup disabled; verify the same owner and retain MFA checks before deletion.
+- Requires a tested email OTP template showing the code. Hosted delivery and provider identity acceptance remain pending.
+
+
 ## Unreleased — account deletion authenticator verification
 
 - Let password accounts choose an enrolled authenticator and enter a current TOTP code before deletion.

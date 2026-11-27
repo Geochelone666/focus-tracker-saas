@@ -18,7 +18,7 @@ export default async function DeleteAccountPage() {
       <p>Notifications and requests already in flight may finish. Copies you previously downloaded or
         shared remain wherever you stored them. Hosting backups and operational logs follow the
         hosting provider’s retention settings; this action does not erase those copies immediately.</p>
-      <p>Use the password for your Focus Tracker account to verify this request. For an authenticator account, enter its current six-digit code below. Other multi-factor
+      <p>Verify this request with your current password or a code sent to your account email. For an authenticator account, enter its current six-digit code below. Other multi-factor
         methods require a session that has completed multi-factor sign-in.</p>
       {process.env.SUPABASE_SERVICE_ROLE_KEY && user.email
         ? <DeleteAccountForm authenticators={authenticators} />
