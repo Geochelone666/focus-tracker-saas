@@ -18,6 +18,27 @@ try {
 
   const home = await page.goto(base);
   assert.equal(home.status(), 200, 'landing page renders');
+  // The bypass link must work before client JavaScript, using native fragment focus.
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Skip to content');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content');
+  await page.keyboard.press('Tab');
+  assert.ok(await page.evaluate(() => document.querySelector('#main-content').contains(document.activeElement)),
+    'tab order continues in page content after skipping the header');
+  const noScript = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+  const nativePage = await noScript.newPage();
+  await nativePage.goto(base);
+  await nativePage.keyboard.press('Tab');
+  assert.equal(await nativePage.locator(':focus').textContent(), 'Skip to content');
+  const bypassBounds = await nativePage.locator(':focus').boundingBox();
+  assert.ok(bypassBounds && bypassBounds.x >= 0 && bypassBounds.y >= 0 &&
+    bypassBounds.x + bypassBounds.width <= 390, 'focused bypass link is visible within the mobile viewport');
+  await nativePage.keyboard.press('Enter');
+  assert.equal(await nativePage.locator(':focus').getAttribute('id'), 'main-content');
+  await nativePage.keyboard.press('Tab');
+  assert.equal(await nativePage.locator(':focus').textContent(), 'Login');
+  await noScript.close();
   const homeLogin = page.getByRole('main').getByRole('link', { name: 'Login', exact: true });
   assert.equal(await homeLogin.getAttribute('href'), '/login', 'signed-out homepage links to login');
   assert.equal(await page.getByRole('main').getByRole('link', { name: 'Go to Dashboard', exact: true }).count(), 0, 'signed-out homepage has no dashboard button');
