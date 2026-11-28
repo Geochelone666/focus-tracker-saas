@@ -32,18 +32,29 @@ do $$ declare n integer; begin
     insert into public.focus_sessions(user_id,schedule_id) values(auth.uid(),'c4444444-4444-4444-8444-444444444444');
     raise exception 'Foreign schedule accepted';
   exception when insufficient_privilege then null; end;
-  n := public.edit_schedule('c1111111-1111-4111-8111-111111111111','Rescheduled','2026-10-23',null,null,'high',30,'low','a1111111-1111-4111-8111-111111111111',null,true);
+  n := public.mutate_schedule(
+    'c1111111-1111-4111-8111-111111111111',
+    (select updated_at from public.schedules where id='c1111111-1111-4111-8111-111111111111'),
+    '{"title":"Rescheduled","scheduled_date":"2026-10-23","priority":"high","estimated_minutes":30,"energy":"low","project_id":"a1111111-1111-4111-8111-111111111111"}',
+    true,
+    jsonb_build_object('c2222222-2222-4222-8222-222222222222',
+      (select updated_at from public.schedules where id='c2222222-2222-4222-8222-222222222222'))
+  );
   if n <> 2 then raise exception 'Wrong series update count'; end if;
   if (select scheduled_date from public.schedules where id='c2222222-2222-4222-8222-222222222222') <> date '2026-10-24' then raise exception 'Future date not shifted'; end if;
   if (select title from public.schedules where id='c3333333-3333-4333-8333-333333333333') <> 'Completed' then raise exception 'Completed occurrence changed'; end if;
   begin
-    perform public.edit_schedule('c4444444-4444-4444-8444-444444444444','Stolen','2026-10-23',null,null,'high',30,null,null,null,false);
+    perform public.mutate_schedule('c4444444-4444-4444-8444-444444444444',now(),'{"title":"Stolen"}');
     raise exception 'Foreign edit accepted';
   exception when raise_exception then
     if sqlerrm <> 'Schedule not found' then raise; end if;
   end;
   begin
-    perform public.edit_schedule('c1111111-1111-4111-8111-111111111111','Forbidden','2026-11-01',null,null,'normal',30,null,'a2222222-2222-4222-8222-222222222222',null,true);
+    perform public.mutate_schedule(
+      'c1111111-1111-4111-8111-111111111111',
+      (select updated_at from public.schedules where id='c1111111-1111-4111-8111-111111111111'),
+      '{"title":"Forbidden","project_id":"a2222222-2222-4222-8222-222222222222"}'
+    );
     raise exception 'Foreign project edit accepted';
   exception when insufficient_privilege then null; end;
   if (select title from public.schedules where id='c1111111-1111-4111-8111-111111111111') <> 'Rescheduled' then raise exception 'Failed series edit partially applied'; end if;

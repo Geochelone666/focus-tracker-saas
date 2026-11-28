@@ -1,5 +1,74 @@
 # Changelog
 
+## Unreleased — email verification for account deletion
+
+- Add a verification-code alternative for signed-in accounts that use OAuth or prefer email confirmation.
+- Send only to the verified account email with automatic signup disabled; verify the same owner and retain MFA checks before deletion.
+- Requires a tested email OTP template showing the code. Hosted delivery and provider identity acceptance remain pending.
+
+
+## Unreleased — account deletion authenticator verification
+
+- Let password accounts choose an enrolled authenticator and enter a current TOTP code before deletion.
+- Verify the factor on an isolated reauthentication session, then confirm AAL2 and the same owner before invoking deletion.
+- Preserve elevated-session support for other MFA methods. Hosted authenticator acceptance remains pending.
+
+
+## Unreleased — confirmed account deletion
+
+- Add a password-verified permanent account deletion form with explicit confirmation, export links and scope/retention information.
+- Derive the target from the authenticated session, require MFA assurance for enrolled accounts, and check deletion outcome after interrupted responses.
+- Reuse existing cascades and server configuration. Hosted authentication and backup-retention acceptance remain pending. See [account deletion](docs/f2-account-deletion.md).
+
+
+## Unreleased — privacy access controls
+
+- Add Settings → Privacy and access, with account export and connection-management links.
+- Revoke the signed-in owner's AI keys and pause registered device reminders in one transaction, with explicit confirmation and safe retries.
+- Requires `20261126000000_privacy_access_controls.sql`. Hosted migration reconciliation remains required.
+
+
+## Unreleased — guided first focus workflow
+
+- Add a skippable guide from Settings and Today for checking timezone, capturing a task, scheduling, focusing and reviewing recorded time. The guide also opens from a specific task.
+- Reuse existing task creation, calendar editing, session transitions and focus totals.
+
+## Unreleased — account export pagination correction
+
+- Fix missing focus segments in account JSON downloads: numeric IDs were serialized as text and the page query sorted that text alias, while the cursor used numeric ordering.
+- Add `20261106030000_account_export_order.sql` to sort by the native key before serialization. Prior migration files and user records remain unchanged.
+- Add exact-ID regressions across digit-width and page boundaries, including IDs above JavaScript's safe integer limit. Existing downloads made with the old function should be regenerated after this migration.
+
+## Unreleased — account data export
+
+- Add a Settings download for account JSON, covering tasks/Trash, projects, focus/break records, recovery context, reflections, calendar history and preferences; retain the existing CSV export.
+- Stream bounded owner-scoped keyset pages, preserve exact bigint IDs and timestamps, and exclude credentials through fixed field projections. Include consistency metadata and a final completion marker; abort failed downloads and support retry/cancellation.
+- Requires `20261106020000_account_export.sql` and default-off `FOCUS_DATA_EXPORT_ENABLED`. See [format, limits and rollback](docs/f2-account-export.md); hosted streaming/auth acceptance remains outstanding.
+
+## Unreleased — persisted Smart Calendar work hours
+
+- Save work hours across devices with owner-scoped revision checks; preserve stale-device edits and require regeneration after a work-window change.
+- Carry canonical preview metadata into drafts and validate saved hours/revisions at staging and confirmation; roll back stale confirmations atomically while preserving successful request replay and undo.
+- Requires additive `20261106010000_calendar_work_preferences.sql`; the Smart Calendar flag remains off. See [deployment, legacy behavior and rollback](docs/f2-work-hours.md).
+- Add a user-requested [supplemental delivery plan](docs/focus2-next-plan.md) covering remaining safety gates, execution feedback, onboarding, privacy, mobile acceptance, trials and public release.
+
+## Unreleased — experimental execution recovery
+
+- Start task-linked focus from the calendar; review open time blocks and recently focused Inbox tasks in the account timezone.
+- Save remaining-time estimates and resume notes with revision checks that preserve stale-device drafts; keep original estimates, task completion and focus accounting separate.
+- Add paginated recovery with active-session return, outcome notes and existing rescheduling/task-edit paths; cover cross-midnight and DST boundaries.
+- Requires `20261106000000_execution_recovery.sql` and default-off `FOCUS_EXECUTION_RECOVERY_ENABLED`; see [deployment and rollback](docs/f2-execution-recovery.md). Hosted acceptance remains outstanding.
+
+## Unreleased — experimental Smart Calendar integration
+
+- Add original/selected day timelines, mobile view switching, overlap/break feedback and exact-version task lock controls. Preserve unsaved edits when a changed work window requires regeneration.
+- Requires `20261104010000_calendar_lock_controls.sql` after the preview snapshot migration. The experimental flag remains disabled by default.
+
+- Add a bounded owner snapshot and a feature-gated real preview, selective/manual edits, versioned confirmation, refresh recovery and CAS undo.
+- Keep manual and locked blocks fixed; reject active focus, stale task revisions and changed timezones.
+- Add snapshot/staging migration `20261104000000_calendar_preview_snapshot.sql` and SQL, action and 390px browser workflow coverage.
+- `FOCUS_SMART_CALENDAR_ENABLED` defaults off; hosted migration drift and independent contract/design acceptance remain release gates.
+
 ## Unreleased — Focus V1 batch 1
 
 - Add persistent count-up/countdown timing, pause/resume, revision-checked atomic focus transitions and retained zero-credit abandonment.

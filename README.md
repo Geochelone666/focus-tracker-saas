@@ -22,6 +22,14 @@ The original MVP scope has expanded into the planning workflow described above. 
 
 Deployment acceptance still requires a matching Supabase project with migrations applied and live checks of authentication, ownership policies, and persistence. Passing unit tests or CI alone does not establish those deployment checks. See the deployment section below and [planning workflow](docs/planning-workflow.md).
 
+The experimental [execution recovery flow](docs/f2-execution-recovery.md) adds calendar-to-focus entry, unfinished-block review and saved resume context. It requires its additive migration and the default-off `FOCUS_EXECUTION_RECOVERY_ENABLED` server flag. [Focus 2 roadmap status](docs/f2-roadmap-status.md) tracks outstanding release gates.
+
+Open the [focus workflow guide](docs/f2-first-workflow.md) in Settings to capture a task, schedule it, focus and review recorded time.
+
+Smart Calendar now requires [saved, versioned work hours](docs/f2-work-hours.md) before generating a real preview. See the [supplemental delivery plan](docs/focus2-next-plan.md) for prioritized work through private trials and public release.
+
+The experimental [account JSON export](docs/f2-account-export.md) downloads tasks, projects, focus history and preferences with owner-isolated, paginated streaming. It requires its additive migration and the default-off `FOCUS_DATA_EXPORT_ENABLED` flag. The existing focus CSV remains available.
+
 ## Local development
 
 Use Node.js 20.19 or newer (production uses Node.js 24) and npm.
@@ -97,3 +105,15 @@ The final V1 branch adds [planned versus actual review](docs/planned-actual.md):
 ## Installable phone app and background notifications
 
 Use the installed web app on iOS/iPadOS 16.4+ or supported Android browsers; developer accounts are not required. Phone notification permissions are opt-in, reminders run on the server, and the app can be closed. This release requires the mobile push migration plus VAPID/server environment variables and a minute scheduler **before enabling production reminders**. Follow [phone setup and limitations](docs/phone-notifications.md). The optional [native Expo client](mobile/README.md) is source for future signed builds; JavaScript exports are not installable APK/IPA packages.
+
+## Experimental Smart Calendar integration
+
+The integration branch includes a real owner-scoped preview → select/edit → confirm
+→ reload → undo workflow at `/calendar/smart-plan`. It is disabled by default.
+For an isolated test environment only, apply the reviewed integration migrations
+through `20261104010000_calendar_lock_controls.sql`, then set
+`FOCUS_SMART_CALENDAR_ENABLED=true`. The calendar displays the experimental entry.
+The separate `/calendar/smart-preview` remains a fixed-data demonstration.
+See [workflow, deployment and rollback notes](docs/f2-live-calendar.md) and
+[Phase 0 gates](docs/f2-phase0-integration.md). This does not clear the hosted
+migration drift, contract agreement or production release gates.

@@ -35,6 +35,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const actual=(id:string)=>taskSeconds.has(id)?taskSeconds.get(id)!/60:undefined;
   return <main className="mx-auto max-w-5xl px-4 py-10">
     <h1 className="text-3xl font-bold">Today</h1>
+    {!live.length&&<p className="my-4"><Link href="/getting-started" className="underline">Plan your first focus session</Link></p>}
     <p className="mt-2 text-slate-600">{today} · {zone} · One step at a time.</p>
     {typeof params.error === 'string' && <p role="alert" className="mt-4 text-red-800">{params.error}</p>}
     <div className="my-6 grid gap-3 sm:grid-cols-3">

@@ -2,7 +2,7 @@
 // No hosted Supabase, production credentials, or production data are used.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { chromium } from '@playwright/test';
@@ -29,9 +29,19 @@ await db.query("insert into public.skills(user_id,name) values($1,'Completion sk
 let queue = Promise.resolve();
 function serial(fn) { const result=queue.then(fn);queue=result.catch(()=>{});return result; }
 const user={id:owner,email:'focus@example.invalid',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:new Date().toISOString()};
-const jwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+86400},'fixture-signature'].map((v,i)=>i===2?v:Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
+const jwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenticated',exp:Math.floor(Date.now()/1000)+86400},'fixture-signature'].map((v,i)=>i===2?Buffer.from(v).toString('base64url'):Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
+const fixtureFactor='bc000000-0000-4000-8000-000000000001';
+const mfaJwt=[{alg:'HS256',typ:'JWT'},{sub:owner,aud:'authenticated',role:'authenticated',aal:'aal2',exp:Math.floor(Date.now()/1000)+86400},'fixture-signature'].map((v,i)=>i===2?Buffer.from(v).toString('base64url'):Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
+let fixtureMfaChallenges=0;
+let fixtureDeletionCodes=0;
+let fixtureEmailCodeUsed=false;
 const safe = value => { if(!/^[a-z_][a-z_0-9]*$/.test(value)) throw new Error('Unsupported fixture identifier');return `"${value}"`; };
 const operations=[];
+let failAccountExport=false;
+let deletedFixtureOwner=false;
+let fixtureDeletionCalls=0;
+let loseCalendarReply=null;
+const calendarRequests=[];
 const server=createServer(async(req,res)=>{
   const began=Date.now(),path=new URL(req.url,"http://fixture").pathname;operations.push(`start ${req.method} ${path}`);
   res.on("finish",()=>operations.push(`done ${req.method} ${path}: ${res.statusCode} (${Date.now()-began}ms)`));
@@ -39,16 +49,81 @@ const server=createServer(async(req,res)=>{
     const url=new URL(req.url,`http://127.0.0.1:${fixturePort}`);
     let text='';for await(const part of req) text+=part;
     const body=text?JSON.parse(text):null;
+    if(['/rest/v1/rpc/confirm_calendar_draft','/rest/v1/rpc/undo_calendar_plan'].includes(url.pathname))
+      calendarRequests.push({operation:url.pathname.split('/').at(-1),...body});
     let output;
-    if(url.pathname==='/auth/v1/user') {
-      if(req.headers.authorization!==`Bearer ${jwt}`){res.writeHead(401,{'content-type':'application/json'});res.end(JSON.stringify({message:'Invalid fixture session'}));return;}
+    if(url.pathname==='/auth/v1/otp') {
+      assert.equal(body.email,user.email);
+      assert.equal(body.create_user,false);
+      fixtureDeletionCodes++;
+      fixtureEmailCodeUsed=false;
+      output={};
+    } else if(url.pathname==='/auth/v1/verify') {
+      assert.equal(body.email,user.email);
+      assert.equal(body.type,'email');
+      if(body.token!=='654321' || fixtureEmailCodeUsed || deletedFixtureOwner){
+        res.writeHead(403,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'otp_expired',msg:'Fixture invalid email code'}));return;
+      }
+      fixtureEmailCodeUsed=true;
+      output={access_token:jwt,refresh_token:'fixture-email-refresh',expires_in:3600,token_type:'bearer',user};
+    } else if(url.pathname==='/auth/v1/token' && url.searchParams.get('grant_type')==='password') {
+      if(body.email!==user.email || body.password!=='delete-fixture-password' || deletedFixtureOwner){
+        res.writeHead(400,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'invalid_credentials',msg:'Invalid fixture credentials'}));return;
+      }
+      output={access_token:jwt,refresh_token:'delete-fixture-refresh',expires_in:3600,token_type:'bearer',user};
+    } else if(url.pathname==='/auth/v1/factors/'+fixtureFactor+'/challenge') {
+      assert.equal(req.headers.authorization,'Bearer '+jwt);
+      fixtureMfaChallenges++;
+      output={id:'fixture-challenge',type:'totp',expires_at:Math.floor(Date.now()/1000)+300};
+    } else if(url.pathname==='/auth/v1/factors/'+fixtureFactor+'/verify') {
+      assert.equal(req.headers.authorization,'Bearer '+jwt);
+      assert.equal(body.challenge_id,'fixture-challenge');
+      if(body.code!=='123456'){
+        res.writeHead(422,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'mfa_verification_failed',msg:'Fixture wrong authenticator code'}));return;
+      }
+      output={access_token:mfaJwt,refresh_token:'fixture-mfa-refresh',expires_in:3600,token_type:'bearer',user};
+    } else if(url.pathname==='/auth/v1/logout') {
+      output={};
+    } else if(url.pathname==='/auth/v1/admin/users/'+owner) {
+      if(req.headers.authorization!=='Bearer fixture-admin-key')throw new Error('Fixture admin authorization required');
+      if(req.method==='DELETE'){
+        assert.equal(body.should_soft_delete,false);
+        fixtureDeletionCalls++;
+        await serial(()=>db.query('delete from auth.users where id=$1',[owner]));
+        deletedFixtureOwner=true;
+        // Deliberately lose the successful response. The action must verify absence.
+        res.writeHead(500,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'unexpected_failure',msg:'Fixture interrupted deletion response'}));return;
+      }
+      if(deletedFixtureOwner){
+        res.writeHead(404,{'content-type':'application/json'});
+        res.end(JSON.stringify({error_code:'user_not_found',msg:'Fixture user not found'}));return;
+      }
+      output={user};
+    } else if(url.pathname==='/auth/v1/user') {
+      if(deletedFixtureOwner||![`Bearer ${jwt}`,`Bearer ${mfaJwt}`].includes(req.headers.authorization)){res.writeHead(401,{'content-type':'application/json'});res.end(JSON.stringify({message:'Invalid fixture session'}));return;}
       output=user;
     } else {
       if(req.headers.authorization!==`Bearer ${jwt}`) throw new Error('Fixture requires authenticated session');
       output=await serial(async()=>{
         await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
         try {
+          if(url.pathname==='/rest/v1/rpc/account_export_page'&&failAccountExport) throw new Error('Fixture export failure');
+          if(url.pathname==='/rest/v1/rpc/account_export_page') return (await db.query('select public.account_export_page($1,$2,$3) as value',[body.p_collection,body.p_after,body.p_limit])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/task_recovery_snapshot') return (await db.query('select public.task_recovery_snapshot($1,$2,$3) as value',[body.p_from,body.p_to,body.p_offset??0])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/save_task_recovery') return (await db.query('select public.save_task_recovery($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_remaining,body.p_note])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/set_calendar_task_lock') return (await db.query('select public.set_calendar_task_lock($1,$2,$3,$4) as value',[body.p_id,body.p_expected,body.p_expected_lock,body.p_locked])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/calendar_preview_snapshot') return (await db.query('select public.calendar_preview_snapshot() as value')).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/save_calendar_work_preferences') return (await db.query('select public.save_calendar_work_preferences($1,$2,$3,$4) as value',[body.p_start,body.p_end,body.p_expected,body.p_timezone])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/stage_calendar_preview'&&body.p_contract) return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4,$5) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone,body.p_contract])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/stage_calendar_preview') return (await db.query('select public.stage_calendar_preview($1,$2,$3,$4) as value',[body.p_changes,body.p_availability,body.p_base_revision,body.p_timezone])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/confirm_calendar_draft') return (await db.query('select public.confirm_calendar_draft($1,$2) as value',[body.p_draft,body.p_request])).rows[0].value;
+          if(url.pathname==='/rest/v1/rpc/undo_calendar_plan') return (await db.query('select public.undo_calendar_plan($1,$2) as value',[body.p_receipt,body.p_request])).rows[0].value;
           if(url.pathname==='/rest/v1/rpc/analytics_report') return (await db.query('select public.analytics_report($1,$2,$3) as report',[body.p_from,body.p_to,body.p_offset??0])).rows[0].report;
+          if(url.pathname==='/rest/v1/rpc/revoke_account_connections') return (await db.query('select public.revoke_account_connections() as result')).rows[0].result;
           if(url.pathname==='/rest/v1/rpc/task_focus_totals') return (await db.query('select * from public.task_focus_totals($1)',[body.p_ids])).rows;
           if(url.pathname==='/rest/v1/rpc/project_focus_totals') return (await db.query('select * from public.project_focus_totals()')).rows;
           if(url.pathname==='/rest/v1/rpc/skill_focus_totals') return (await db.query('select * from public.skill_focus_totals($1,$2)',[body.p_from,body.p_to])).rows;
@@ -87,12 +162,17 @@ const server=createServer(async(req,res)=>{
         } finally { await db.exec("reset role; select set_config('request.jwt.claim.sub','',false);"); }
       });
     }
+    if(loseCalendarReply&&url.pathname===`/rest/v1/rpc/${loseCalendarReply}`){
+      loseCalendarReply=null;
+      res.writeHead(500,{'content-type':'application/json'});
+      res.end(JSON.stringify({code:'FIXTURE_LOST_RESPONSE',message:'Fixture response lost after commit'}));return;
+    }
     res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(output));
   } catch(error) {res.writeHead(error.code==='23505'?409:error.code==='40001'?409:400,{'content-type':'application/json'});res.end(JSON.stringify({message:error.message,code:error.code||'FIXTURE'}));}
 });
 await new Promise(resolve=>server.listen(fixturePort,'127.0.0.1',resolve));
 let logs='';
-const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(appPort)],{env:{...process.env,FOCUS_SMART_CALENDAR_ENABLED:'true',FOCUS_EXECUTION_RECOVERY_ENABLED:'true',FOCUS_DATA_EXPORT_ENABLED:'true',SUPABASE_SERVICE_ROLE_KEY:'fixture-admin-key',NEXT_PUBLIC_SUPABASE_URL:`http://127.0.0.1:${fixturePort}`,NEXT_PUBLIC_SUPABASE_ANON_KEY:'fixture-anon-key',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
 app.stdout.on('data',chunk=>{logs+=chunk;});app.stderr.on('data',chunk=>{logs+=chunk;});
 let browser;
 const rows=()=>serial(async()=>(await db.query('select * from public.focus_sessions order by created_at,id')).rows);
@@ -110,8 +190,15 @@ try {
   const first=await browser.newContext(),second=await browser.newContext();
   await first.addCookies([cookie]);await second.addCookies([cookie]);
   let a=await first.newPage();const b=await second.newPage();
-  const errors=[];for(const page of [a,b])page.on('pageerror',error=>errors.push(error.message));
+  const errors=[];for(const page of [a,b])page.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error at',page.url(),error.message);});
   await Promise.all([a.goto(base+'/dashboard'),b.goto(base+'/dashboard')]);
+  await a.keyboard.press('Tab');
+  assert.equal(await a.locator(':focus').textContent(),'Skip to content');
+  await a.keyboard.press('Enter');
+  assert.equal(await a.locator(':focus').getAttribute('id'),'main-content');
+  await a.keyboard.press('Tab');
+  assert.ok(await a.evaluate(()=>document.querySelector('#main-content').contains(document.activeElement)),
+    'Authenticated keyboard navigation must bypass header controls');
   await Promise.all([a.getByRole('button',{name:'Start Session',exact:true}).click(),b.getByRole('button',{name:'Start Session',exact:true}).click()]);
   await waitFor(async()=>(await rows()).length===1,'Two starts must create exactly one session');
   await backdateRunning(1);await a.reload();
@@ -123,7 +210,7 @@ try {
   await a.waitForTimeout(1100);assert.equal(await a.getByRole('timer').innerText(),frozen,'Ten browser-clock minutes while paused do not accrue');
   assert.equal(Number((await rows())[0].accumulated_ms),Number(paused.accumulated_ms));
   // Keep the clock simulation isolated from subsequent framework scheduling.
-  await a.close();a=await first.newPage();a.on('pageerror',error=>errors.push(error.message));await a.goto(base+'/dashboard');
+  await a.close();a=await first.newPage();a.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error at',a.url(),error.message);});await a.goto(base+'/dashboard');
   await a.getByRole('button',{name:'Resume focus',exact:true}).click();await a.getByRole('button',{name:'Pause focus',exact:true}).waitFor();
   await b.reload(); // Both devices now hold the same running revision.
   await a.getByRole('button',{name:'Pause focus',exact:true}).click();await a.getByRole('button',{name:'Resume focus',exact:true}).waitFor();
@@ -196,7 +283,14 @@ try {
   await a.reload();await a.setViewportSize({width:390,height:844});
   await a.getByRole('combobox',{name:'Arrange task'}).selectOption({label:'Calendar captured task'});
   const mobileEditor=a.getByRole('heading',{name:'Arrange: Calendar captured task'}).locator('..');
-  await mobileEditor.getByLabel('Duration (minutes)').fill('60');await mobileEditor.getByRole('button',{name:'Save time block'}).click();
+  // Keyboard-only mobile edit: focus, select-all, type and activate via Enter.
+  const durationControl=mobileEditor.getByLabel('Duration (minutes)');
+  await durationControl.focus();
+  await a.keyboard.press('ControlOrMeta+A');
+  await a.keyboard.type('60');
+  const saveWithKeyboard=mobileEditor.getByRole('button',{name:'Save time block'});
+  await saveWithKeyboard.focus();
+  await a.keyboard.press('Enter');
   await waitFor(async()=>(await calendarTask()).estimated_minutes===60,'Mobile edit did not persist');
   assert.equal((await calendarTask()).deadline,'2026-12-31');
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile calendar overflow');
@@ -212,7 +306,22 @@ try {
   await reschedule.getByRole('button',{name:'Save time block'}).click();await waitFor(async()=>(await calendarTask()).scheduled_date===today,'Replan failed');
   await a.getByRole('link',{name:'week',exact:true}).click();
   await a.getByRole('region',{name:'week time blocking'}).waitFor();
+
+  const dayPicker=a.getByRole('combobox',{name:'Week day (mobile)'});
+  await dayPicker.waitFor();
+  const originalDay=await dayPicker.inputValue();
+  const alternateDay=await dayPicker.locator('option').evaluateAll(options=>options.map(x=>x.value).find(v=>v!==''));
+  const nextDay=alternateDay===originalDay?await dayPicker.locator('option').nth(1).getAttribute('value'):alternateDay;
+  assert.ok(nextDay && nextDay!==originalDay,'Mobile week must allow changing days');
+  await dayPicker.selectOption(nextDay);
+  assert.ok(await a.getByLabel('Timeline '+nextDay,{exact:true}).isVisible(),'Mobile selected day must be visible');
+  await dayPicker.selectOption(originalDay);
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Mobile week overflow');
+  await mkdir('test-artifacts',{recursive:true});
+  await a.screenshot({path:'test-artifacts/f2-f02-calendar-mobile-390.png',fullPage:true});
+  await a.setViewportSize({width:1280,height:900});
+  await a.screenshot({path:'test-artifacts/f2-f02-calendar-desktop-1280.png',fullPage:true});
+  await a.setViewportSize({width:390,height:844});
   await a.screenshot({path:'/tmp/focus-v1-calendar-390.png',fullPage:true});
   await a.goto(base+'/today');
   const taskCard=a.locator('li').filter({has:a.getByRole('heading',{name:'Calendar captured task',exact:true})});
@@ -242,6 +351,340 @@ try {
   await quick.getByLabel('Date (optional)',{exact:true}).fill(new Date(Date.parse(today)+7*86400000).toISOString().slice(0,10));
   await quick.getByRole('button',{name:'Add plan',exact:true}).click();
   await waitFor(async()=>serial(async()=>(await db.query("select count(*)::int as n from public.schedules where title='Next week adjustment'")).rows[0].n===1),'Future adjustment missing');
+
+  // Fixture-only Smart Calendar preview: browser decisions cannot mutate schedules.
+  const beforePreview=await serial(async()=>(await db.query('select count(*)::int as n from public.schedules')).rows[0].n);
+  await a.setViewportSize({width:390,height:844});
+  await a.goto(base+'/calendar/smart-preview');
+  await a.getByRole('heading',{name:'Review a proposed day.'}).waitFor();
+  await a.getByRole('button',{name:'Keep original'}).first().click();
+  await a.getByRole('button',{name:'Accept suggestion'}).first().click();
+  await a.getByRole('button',{name:'Lock original'}).first().click();
+  await a.getByRole('button',{name:'Unlock block'}).first().click();
+  await a.getByRole('button',{name:'Conflicts',exact:true}).click();
+  await a.getByRole('button',{name:'All',exact:true}).click();
+  const physicsCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Physics problem set'} )});
+  await physicsCard.getByText('Adjust time manually').click();
+  await physicsCard.getByLabel('Manual start for Physics problem set').fill('16:00');
+  await physicsCard.getByLabel('Manual duration for Physics problem set').fill('60');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('button',{name:'Undo demo confirmation'}).waitFor();
+  await a.getByRole('button',{name:'Undo demo confirmation'}).click();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('submit');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('alert').filter({hasText:'Simulated submit failure'}).waitFor();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('revision');
+  await a.getByRole('button',{name:'Confirm demo selection'}).click();
+  await a.getByRole('alert').filter({hasText:'Simulated stale revision'}).waitFor();
+  await a.getByRole('combobox',{name:'Test condition'}).selectOption('network');
+  await a.getByRole('button',{name:'Reload example'}).click();
+  await a.getByRole('alert').filter({hasText:'Simulated network failure'}).waitFor();
+  await a.getByRole('button',{name:'Retry sample'}).click();
+  await a.getByRole('button',{name:'Reset decisions'}).click();
+  assert.equal(await serial(async()=>(await db.query('select count(*)::int as n from public.schedules')).rows[0].n),beforePreview,'Demo preview must not write tasks');
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Smart Calendar mobile overflow');
+  await mkdir('test-artifacts',{recursive:true});
+  await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-mobile.png',fullPage:true});
+  await a.setViewportSize({width:1280,height:900});
+  await a.screenshot({path:'test-artifacts/f2-f02-smart-calendar-desktop.png',fullPage:true});
+  // Real experimental UI -> algorithm -> staging -> atomic SQL -> reload -> CAS undo.
+  const smartId='77777777-7777-4777-8777-777777777777';
+  await serial(()=>db.query("insert into schedules(id,user_id,title,estimated_minutes) values($1,$2,'Smart calendar integration task',60)",[smartId,owner]));
+  const future=new Date(Date.now()+86400000*3).toISOString().slice(0,10);
+  await a.setViewportSize({width:390,height:844});
+  await a.goto(base+'/calendar/smart-plan');
+  assert.equal(await a.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Calendar',exact:true}).getAttribute('aria-current'),'location');
+  assert.equal(await a.getByRole('button',{name:'Generate preview',exact:true}).isDisabled(),true);
+  await a.getByRole('button',{name:'Save work hours',exact:true}).click();
+  await a.getByText('Work hours saved across devices. Generate a new preview to use them.',{exact:true}).waitFor();
+  await a.reload();
+  assert.equal(await a.getByLabel('Work starts',{exact:true}).inputValue(),'09:00');
+  await a.getByText('Protect a task from scheduling',{exact:true}).click();
+  await a.getByLabel('Task to protect',{exact:true}).selectOption(smartId);
+  await a.getByRole('button',{name:'Lock task',exact:true}).click();
+  await a.getByText('Task locked. Generate a fresh preview; its current time will stay fixed.',{exact:true}).waitFor();
+  await a.reload();
+  await a.getByText('Protect a task from scheduling',{exact:true}).click();
+  await a.getByLabel('Task to protect',{exact:true}).selectOption(smartId);
+  await a.getByRole('button',{name:'Unlock task',exact:true}).waitFor();
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await a.getByRole('heading',{name:'Compare your day',exact:true}).waitFor();
+  assert.equal(await a.locator('article').filter({has:a.getByRole('heading',{name:'Smart calendar integration task',exact:true})}).count(),0,'Locked Inbox task must be excluded');
+  await a.getByRole('button',{name:'Unlock task',exact:true}).click();
+  await a.getByText('Task unlocked. Generate a fresh preview. Manually scheduled tasks still keep their time.',{exact:true}).waitFor();
+
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  const smartCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Smart calendar integration task',exact:true})});
+  await smartCard.waitFor();
+  // Choose only this task; leave all other proposals untouched.
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await smartCard.getByLabel('Start for Smart calendar integration task',{exact:true}).fill('14:00');
+  await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).fill('90');
+  await smartCard.getByText(`On confirmation: ${future} 14:00 (90 min)`,{exact:true}).waitFor();
+  const afterTimeline=a.getByRole('region',{name:'After selection timeline',exact:true});
+  assert.ok((await afterTimeline.innerText()).includes('14:00'),'Timeline reflects manual edit');
+  await a.getByRole('button',{name:'Original plan',exact:true}).click();
+  await a.getByRole('region',{name:'Original plan timeline',exact:true}).waitFor({state:'visible'});
+  await a.getByRole('button',{name:'After selection',exact:true}).click();
+  await a.getByLabel('Work ends',{exact:true}).fill('16:00');
+  assert.equal(await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).isDisabled(),true,'Changing window must invalidate confirmation');
+  assert.equal(await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).inputValue(),'90','Window change preserves unsaved edits');
+  await a.getByRole('button',{name:'Save work hours',exact:true}).click();
+  await a.getByText('Work hours saved across devices. Generate a new preview to use them.',{exact:true}).waitFor();
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await a.getByText('Review the selected changes below. Nothing has been saved.',{exact:true}).waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  await smartCard.getByLabel('Start for Smart calendar integration task',{exact:true}).fill('14:00');
+  await smartCard.getByLabel('Minutes for Smart calendar integration task',{exact:true}).fill('90');
+
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real preview controls overflow');
+  await a.screenshot({path:'test-artifacts/f2-f02-live-calendar-mobile.png',fullPage:true});
+  loseCalendarReply='confirm_calendar_draft';
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  const retryMessage='Could not complete the request. Your selection is kept. Retry to check the same request safely.';
+  await a.getByText(retryMessage,{exact:true}).waitFor();
+  const interruptedConfirm=calendarRequests.at(-1);
+  assert.equal(interruptedConfirm.operation,'confirm_calendar_draft');
+  await a.reload();
+  assert.equal(await a.getByRole('button',{name:'Generate preview',exact:true}).isDisabled(),true,'Unresolved confirmation blocks a new plan');
+  await a.getByRole('button',{name:'Retry pending confirmation',exact:true}).click();
+  await a.getByText('Plan saved. The calendar now shows the saved time blocks.',{exact:true}).waitFor();
+  assert.deepEqual(calendarRequests.at(-1),interruptedConfirm,'Reload must retry the exact confirmation request');
+  assert.equal((await serial(()=>db.query('select count(*)::integer as count from calendar_plan_receipts where request_id=$1',[interruptedConfirm.p_request]))).rows[0].count,1);
+  const persisted=await serial(()=>db.query("select scheduled_date::text as day,scheduled_time::text as time,estimated_minutes as minutes from schedules where id=$1",[smartId]));
+  assert.deepEqual(persisted.rows,[{day:future,time:'14:00:00',minutes:90}]);
+  await a.reload();
+  await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).waitFor();
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real Smart Calendar mobile overflow');
+  loseCalendarReply='undo_calendar_plan';
+  await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).click();
+  await a.getByText(retryMessage,{exact:true}).waitFor();
+  const interruptedUndo=calendarRequests.at(-1);
+  const undoneRevision=(await serial(()=>db.query('select revision::text from calendar_plan_state where user_id=$1',[owner]))).rows[0].revision;
+  await a.reload();
+  await a.getByRole('button',{name:'Retry pending undo',exact:true}).waitFor();
+  assert.equal(await a.getByRole('button',{name:'Generate preview',exact:true}).isDisabled(),true,'Unresolved undo blocks a new plan');
+  await a.getByRole('button',{name:'Retry pending undo',exact:true}).click();
+  await a.getByText('Plan undone. Previous task times have been restored.',{exact:true}).waitFor();
+  assert.deepEqual(calendarRequests.at(-1),interruptedUndo,'Reload must retry the exact undo request');
+  assert.equal((await serial(()=>db.query('select revision::text from calendar_plan_state where user_id=$1',[owner]))).rows[0].revision,undoneRevision,'Undo replay must not advance the revision twice');
+  assert.equal(await a.evaluate(owner=>localStorage.getItem(`focus-calendar-request:${owner}:pending-undo`),owner),null,'Successful undo replay clears its pending marker');
+  assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
+    [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await smartCard.waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  // Another device changes saved hours after this preview was generated.
+  await serial(async()=>{
+    await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+    try{
+      const current=(await db.query('select revision::text from public.calendar_work_preferences where user_id=$1',[owner])).rows[0].revision;
+      await db.query("select public.save_calendar_work_preferences('10:00','18:00',$1,'America/Toronto')",[current]);
+    }finally{await db.exec("reset role; select set_config('request.jwt.claim.sub','',false);");}
+  });
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  await a.getByText('Your tasks or plan changed. Generate a fresh preview before saving.',{exact:true}).waitFor();
+  assert.equal(await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).isChecked(),true,'Work hour conflict preserves selection');
+  await a.getByLabel('Work starts',{exact:true}).fill('08:00');
+  await a.getByRole('button',{name:'Save work hours',exact:true}).click();
+  await a.getByText('Work hours changed on another device. Your edits are kept. Reload before saving.',{exact:true}).waitFor();
+  assert.equal(await a.getByLabel('Work starts',{exact:true}).inputValue(),'08:00','Stale work hour save preserves input');
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Work hours mobile overflow');
+  await a.screenshot({path:'test-artifacts/f2-f02-work-hours-mobile.png',fullPage:true});
+  await a.reload();
+  assert.equal(await a.getByLabel('Work starts',{exact:true}).inputValue(),'10:00');
+  assert.equal(await a.getByLabel('Work ends',{exact:true}).inputValue(),'18:00');
+  await a.getByLabel('First day').fill(future);
+  await a.getByLabel('Days',{exact:true}).fill('1');
+  await a.getByRole('button',{name:'Generate preview',exact:true}).click();
+  await smartCard.waitFor();
+  for(const checkbox of await a.getByRole('checkbox',{name:'Save change',exact:true}).all())await checkbox.uncheck();
+  await smartCard.getByRole('checkbox',{name:'Save change',exact:true}).check();
+  console.log('PASS: persisted work hours / reload / stale preview rejection / stale preference draft retention at 390px');
+  await serial(()=>db.query("update schedules set title='Changed on another device' where id=$1",[smartId]));
+  await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  await a.getByText('Your tasks or plan changed. Generate a fresh preview before saving.',{exact:true}).waitFor();
+  assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
+    [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
+  console.log('PASS: real Smart Calendar generate / select / manual edit / confirm / reload / undo / stale-device rejection at 390px');
+  const recoveryId='88888888-8888-4888-8888-888888888888';
+  const recoveryDay=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto'}).format(new Date());
+  await serial(()=>db.query("insert into schedules(id,user_id,title,scheduled_date,scheduled_time,estimated_minutes) values($1,$2,'Recovery workflow task',$3,'09:00',60)",[recoveryId,owner,recoveryDay]));
+  await a.goto(base+'/calendar/recovery');
+  const recoveryCard=a.locator('article').filter({has:a.getByRole('heading',{name:'Recovery workflow task',exact:true})});
+  await recoveryCard.locator('form[data-recovery-ready="true"]').waitFor();
+  await recoveryCard.getByLabel('Your remaining estimate (minutes)').fill('30');
+  await recoveryCard.getByLabel('Where to pick up next').fill('Resume at the SQL regression checks');
+  await recoveryCard.getByRole('button',{name:'Save recovery context',exact:true}).click();
+  await recoveryCard.getByText('Recovery context saved. Task times and focus records are unchanged.',{exact:true}).waitFor();
+  await a.reload();
+  await recoveryCard.locator('form[data-recovery-ready="true"]').waitFor();
+  assert.equal(await recoveryCard.getByLabel('Your remaining estimate (minutes)').inputValue(),'30');
+  assert.equal(await recoveryCard.getByLabel('Where to pick up next').inputValue(),'Resume at the SQL regression checks');
+  await recoveryCard.getByLabel('Where to pick up next').fill('Keep this unsaved recovery context');
+  await serial(()=>db.query("update schedules set priority='high' where id=$1",[recoveryId]));
+  await recoveryCard.getByRole('button',{name:'Save recovery context',exact:true}).click();
+  await recoveryCard.getByRole('alert').filter({hasText:'changed on another device'}).waitFor();
+  assert.equal(await recoveryCard.getByLabel('Where to pick up next').inputValue(),'Keep this unsaved recovery context');
+  assert.deepEqual((await serial(()=>db.query('select estimated_minutes,remaining_minutes,resume_note,is_done from schedules where id=$1',[recoveryId]))).rows,
+    [{estimated_minutes:60,remaining_minutes:30,resume_note:'Resume at the SQL regression checks',is_done:false}]);
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Recovery page overflow at 390px');
+  await a.screenshot({path:'test-artifacts/f2-f02-recovery-mobile.png',fullPage:true});
+  await a.goto(base+'/calendar?view=day&date='+recoveryDay);
+  await a.getByLabel('Arrange task',{exact:true}).selectOption(recoveryId);
+  await a.getByRole('button',{name:'Focus selected task',exact:true}).click();
+  await waitFor(async()=>(await rows()).some(s=>s.schedule_id===recoveryId&&s.ended_at===null),'Calendar focus must preserve task association');
+  await a.getByRole('button',{name:'Pause focus',exact:true}).click();
+  await a.goto(base+'/calendar/recovery');
+  await recoveryCard.getByText('Session is paused',{exact:true}).waitFor();
+  await recoveryCard.getByRole('link',{name:'Return to active session',exact:true}).click();
+  await a.getByRole('button',{name:'Resume focus',exact:true}).click();
+  await a.getByRole('button',{name:'Finish focus',exact:true}).click();
+  await waitFor(async()=>(await rows()).some(s=>s.schedule_id===recoveryId&&s.focus_status==='completed'),'Recovery focus must complete');
+  const afterRecovery=await serial(()=>db.query('select is_done,estimated_minutes,remaining_minutes,resume_note from schedules where id=$1',[recoveryId]));
+  assert.equal(afterRecovery.rows[0].is_done,false,'Finishing focus must not complete task');
+  assert.equal(afterRecovery.rows[0].estimated_minutes,60);assert.equal(afterRecovery.rows[0].remaining_minutes,30);
+  console.log('PASS: recovery context / reload / stale edit preservation / calendar focus / pause / resume / finish without task completion');
+  // Export multiple keyset pages through the real route and native browser download.
+  const exportSession='d6000000-0000-4000-8000-000000000001';
+  await serial(async()=>{
+    await db.query("insert into schedules(user_id,title) select $1,'Export task '||i from generate_series(1,105) i",[owner]);
+    await db.query("insert into focus_sessions(id,user_id,started_at,ended_at,duration_sec) values($1,$2,'2026-11-01T05:59:00Z','2026-11-01T06:00:00Z',60)",[exportSession,owner]);
+    await db.query("insert into focus_segments(id,session_id,user_id,started_at,ended_at,duration_ms) overriding system value select i,$1,$2,'2026-11-01T05:59:00Z','2026-11-01T06:00:00Z',60000 from generate_series(9999990,10000194) i",[exportSession,owner]);
+    await db.query("insert into focus_segments(id,session_id,user_id,started_at,ended_at,duration_ms) overriding system value values(9007199254740993,$1,$2,'2026-11-01T05:59:00Z','2026-11-01T06:00:00Z',60000)",[exportSession,owner]);
+    await db.query("insert into integration_tokens(user_id,name,scope,token_hash,expires_at) values($1,'Export credential check','read',repeat('f',64),now()+interval '1 day')",[owner]);
+  });
+  await a.goto(base+'/settings');
+  await a.getByRole('link',{name:'Download your data',exact:true}).click();
+  await a.getByRole('heading',{name:'Download your data',exact:true}).waitFor();
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Data page overflow at 390px');
+  await a.screenshot({path:'test-artifacts/f2-f02-account-export-mobile.png',fullPage:true});
+  failAccountExport=true;
+  await a.getByRole('link',{name:'Download account JSON',exact:true}).click();
+  await a.getByRole('alert').filter({hasText:'Your data could not be downloaded'}).waitFor();
+  failAccountExport=false;
+  const downloadReady=a.waitForEvent('download');
+  await a.getByRole('link',{name:'Download account JSON',exact:true}).click();
+  const download=await downloadReady;
+  assert.equal(await download.failure(),null);
+  assert.match(download.suggestedFilename(),/^focus-account-.*\.json$/);
+  const accountText=await readFile(await download.path(),'utf8');
+  const account=JSON.parse(accountText);
+  assert.equal(account.format,'focus-account/v1');assert.equal(account.complete,true);assert.equal(account.owner_id,owner);
+  const ownedTasks=(await serial(()=>db.query('select count(*)::int as n from schedules where user_id=$1',[owner]))).rows[0].n;
+  assert.equal(account.counts.tasks,ownedTasks);assert.equal(account.data.tasks.length,ownedTasks);
+  assert.equal(new Set(account.data.tasks.map(task=>task.id)).size,ownedTasks,'Export must not repeat tasks at page boundaries');
+  assert.equal(account.data.tasks.find(task=>task.id===recoveryId).resume_note,'Resume at the SQL regression checks');
+  assert.ok(account.data.focus_sessions.some(session=>session.session_kind==='short_break'));
+  const expectedSegments=(await serial(()=>db.query('select id::text as segment_id from focus_segments where user_id=$1 order by id',[owner]))).rows.map(row=>row.segment_id);
+  assert.deepEqual(account.data.focus_segments.map(segment=>segment.id),expectedSegments,'Downloaded segment IDs must exactly match database numeric order without omissions or duplicates');
+  assert.equal(account.counts.focus_segments,expectedSegments.length);
+  assert.equal(account.data.focus_segments.at(-1).id,'9007199254740993');
+  assert.ok(account.data.ai_connections.some(connection=>connection.name==='Export credential check'));
+  assert.ok(!accountText.includes('token_hash')&&!accountText.includes('f'.repeat(64)),'Export must omit credential hashes');
+  assert.ok(account.data.work_preferences.length===1,'Saved work hours must be portable');
+  assert.equal((await first.request.get(base+'/history/export')).status(),200,'Existing CSV must still work');
+  console.log('PASS: native account JSON download / paginated tasks and exact numeric segment IDs / recovery and work preferences / credential exclusion / 390px layout');
+  await a.goto(base+'/getting-started');
+  await a.getByText('Create a task for this guide',{exact:true}).click();
+  const guideCapture=a.locator('details').filter({has:a.getByText('Create a task for this guide',{exact:true})}).locator('form');
+  await guideCapture.getByLabel('Title',{exact:true}).fill('Guided focus task');
+  await guideCapture.getByLabel('Estimated minutes',{exact:true}).fill('25');
+  await guideCapture.getByRole('button',{name:'Add plan',exact:true}).click();
+  await a.waitForURL(url => url.pathname === '/getting-started' && url.searchParams.has('task'), {waitUntil:'commit'});
+  const guided=(await serial(()=>db.query("select id from schedules where user_id=$1 and title='Guided focus task'",[owner]))).rows[0].id;
+  assert.equal(new URL(a.url()).searchParams.get('task'), guided);
+  await a.getByRole('link',{name:'Arrange this task in calendar',exact:true}).click();
+  assert.equal(await a.getByLabel('Arrange task',{exact:true}).inputValue(),guided);
+  await a.getByLabel('Start time',{exact:true}).fill('19:00');
+  await a.getByRole('button',{name:'Save time block',exact:true}).click();
+  await waitFor(async()=>(await serial(()=>db.query('select scheduled_time from schedules where id=$1',[guided]))).rows[0].scheduled_time==='19:00:00','Guide block save missing');
+  await a.getByRole('link',{name:'Return to your focus guide',exact:true}).click();
+  await a.getByText(/Saved for .* at 19:00 \(25 minutes\)/).waitFor();
+  await a.getByRole('button',{name:'Start focus on this task',exact:true}).click();
+  await a.getByRole('button',{name:'Pause focus',exact:true}).click();
+  await a.getByRole('button',{name:'Resume focus',exact:true}).waitFor();
+  await a.goto(base+'/getting-started?task='+guided);
+  await a.getByRole('link',{name:'Return to your active session',exact:true}).click();
+  await a.getByRole('button',{name:'Resume focus',exact:true}).click();
+  await a.getByRole('button',{name:'Pause focus',exact:true}).waitFor();
+  await backdateRunning(1);
+  await a.getByRole('button',{name:'Finish focus',exact:true}).click();
+  await waitFor(async()=>(await rows()).some(session=>session.schedule_id===guided&&session.focus_status==='completed'),'Guide focus completion missing');
+  await a.goto(base+'/getting-started?task='+guided);
+  const guideSeconds=(await serial(()=>db.query("select sum(duration_sec)::int as seconds from focus_sessions where schedule_id=$1 and focus_status='completed' and session_kind='focus'",[guided]))).rows[0].seconds;
+  assert.ok(guideSeconds>=60);
+  await a.getByText(`${Number((guideSeconds/60).toFixed(1))} minutes of completed focus recorded for this task.`,{exact:true}).waitFor();
+  assert.equal((await serial(()=>db.query('select is_done from schedules where id=$1',[guided]))).rows[0].is_done,false);
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Guide overflow at 390px');
+  await a.screenshot({path:'test-artifacts/f2-f02-first-workflow-mobile.png',fullPage:true});
+  console.log('PASS: guided capture / preselected calendar / saved block / focus / pause / resume / real recorded progress at 390px');
+  await serial(()=>db.query("insert into push_devices(id,user_id,expo_token,platform,name) values('b9200000-0000-4000-8000-000000000001',$1,'ExpoPushToken[PrivacyFixture]','android','Privacy fixture')",[owner]));
+  await a.goto(base+'/settings/privacy');
+  await a.getByRole('checkbox').check();
+  await a.getByRole('button',{name:'Revoke keys and pause reminders',exact:true}).click();
+  await a.getByRole('status').filter({hasText:'All existing AI keys are revoked'}).waitFor();
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from integration_tokens where user_id=$1 and revoked_at is null',[owner]))).rows[0].count,0);
+  assert.equal((await serial(()=>db.query('select enabled from push_devices where id=$1',['b9200000-0000-4000-8000-000000000001']))).rows[0].enabled,false);
+  assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Privacy overflow at 390px');
+  console.log('PASS: confirmed owner privacy control revokes AI keys and pauses device reminders at 390px');
+  user.factors=[{id:fixtureFactor,factor_type:'totp',status:'verified',friendly_name:'Fixture authenticator',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}];
+  await a.goto(base+'/settings/privacy/delete');
+  assert.equal(await a.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Settings',exact:true}).getAttribute('aria-current'),'location');
+  const deleteForm=a.locator('form').filter({has:a.getByRole('button',{name:'Permanently delete my account',exact:true})});
+  await deleteForm.getByLabel('Current password',{exact:true}).fill('wrong-fixture-password');
+  await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('000000');
+  await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
+  await deleteForm.getByRole('checkbox').check();
+  await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
+  await a.getByRole('alert').filter({hasText:'Could not verify your current password'}).waitFor();
+  assert.equal(fixtureDeletionCalls,0);
+  user.app_metadata={provider:'google',providers:['google']};
+  await a.getByLabel('Verify with',{exact:true}).selectOption('email');
+  await deleteForm.getByRole('button',{name:'Send verification code',exact:true}).click();
+  await deleteForm.getByRole('status').filter({hasText:'Check your account email'}).waitFor();
+  assert.equal(fixtureDeletionCodes,1);
+  await deleteForm.getByLabel('Email verification code',{exact:true}).fill('000000');
+  await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('000000');
+  await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
+  await deleteForm.getByRole('checkbox').check();
+  await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
+  await a.getByRole('alert').filter({hasText:'Could not verify the email code'}).waitFor();
+  assert.equal(await a.getByLabel('Verify with',{exact:true}).inputValue(),'email');
+  assert.equal(await deleteForm.locator('input[name="verification_method"]').inputValue(),'email');
+  assert.equal(fixtureDeletionCalls,0);
+  await deleteForm.getByLabel('Email verification code',{exact:true}).fill('654321');
+  await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('000000');
+  await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
+  await deleteForm.getByRole('checkbox').check();
+  await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
+  await a.getByRole('alert').filter({hasText:'Could not verify the authenticator code'}).waitFor();
+  assert.equal(fixtureDeletionCalls,0);
+  await a.getByRole('alert').filter({hasText:'Request a new email code'}).waitFor();
+  await deleteForm.getByRole('button',{name:'Send verification code',exact:true}).click();
+  await deleteForm.getByRole('status').filter({hasText:'Check your account email'}).waitFor();
+  await waitFor(async()=>fixtureDeletionCodes===2,'A consumed email code must be replaced');
+  await deleteForm.getByLabel('Email verification code',{exact:true}).fill('654321');
+  await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('123456');
+  await deleteForm.getByLabel('Type DELETE to confirm',{exact:true}).fill('DELETE');
+  await deleteForm.getByRole('checkbox').check();
+  await deleteForm.getByRole('button',{name:'Permanently delete my account',exact:true}).click();
+  await a.getByText('Your account and its Focus Tracker records have been deleted.',{exact:true}).waitFor();
+  assert.equal(fixtureMfaChallenges,2);
+  assert.equal(fixtureDeletionCalls,1);
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from schedules where user_id=$1',[owner]))).rows[0].count,0);
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from push_devices where user_id=$1',[owner]))).rows[0].count,0);
+  assert.equal((await serial(()=>db.query('select count(*)::int as count from integration_tokens where user_id=$1',[owner]))).rows[0].count,0);
+  console.log('PASS: wrong password and email code rejected / email reauthentication / owned authenticator verified / confirmed fixture account deletion / cascades / lost response verified / signed out');
   assert.deepEqual(errors,[],'No browser runtime errors');
   console.log('PASS: real Server Actions + migrated SQL; concurrent starts, pause/reload, 10-minute paused clock, stale-device conflict, resume/finish/note, 25-minute countdown capped once, separate 5-minute break, Today task link, abandon, capture/calendar drag/resize/deadline/reload/Inbox, 390px controls, complete capture/plan/focus/pause/review/improve loop with +30m variance.');
 } catch(error) {console.error(logs.slice(-10000));console.error(operations.slice(-65).join("\n"));const page=browser?.contexts()[0]?.pages()[0];if(page){console.error((await page.locator('body').innerText()).slice(-6000));console.error('Visible pause-break buttons:',await page.getByRole('button',{name:'Pause break',exact:true}).count());}throw error;}

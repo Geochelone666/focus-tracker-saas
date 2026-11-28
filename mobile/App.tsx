@@ -7,7 +7,7 @@ import {APP_ORIGIN,configured,deviceRequest,phoneRequest,supabase} from './src/c
 import {disablePush,enablePush,installationId,openNotificationSettings,pushOptedIn,refreshPush} from './src/notifications';
 import {draftFor,localDay,parseDraft,PLAN_COLUMNS,type Draft,type Plan} from './src/plans';
 type Tab='Today'|'Inbox'|'All'|'Trash'|'Settings';
-type Focus={id:string;started_at:string;schedule_id:string|null};
+type Focus={id:string;started_at:string;schedule_id:string|null;focus_revision:number};
 const errorText=(error:unknown)=>error instanceof Error?error.message:'Could not connect. Please try again.';
 function Button({title,onPress,disabled=false,secondary=false}:{title:string;onPress:()=>void;disabled?:boolean;secondary?:boolean}){
  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[styles.button,secondary&&styles.secondary,disabled&&styles.disabled]}><Text style={[styles.buttonText,secondary&&styles.secondaryText]}>{title}</Text></Pressable>;
@@ -40,7 +40,7 @@ function AppContent(){
    query=tab==='Trash'?query.not('deleted_at','is',null):query.is('deleted_at',null);
    if(tab==='Today')query=query.or(`scheduled_date.eq.${today},and(scheduled_date.lt.${today},is_done.eq.false)`);
    if(tab==='Inbox')query=query.is('scheduled_date',null);
-   const [tasks,active]=await Promise.all([query.order('is_done').order('scheduled_date',{nullsFirst:true}).order('id').range(start,start+99),supabase.from('focus_sessions').select('id,started_at,schedule_id').eq('user_id',userId).is('ended_at',null).maybeSingle()]);
+   const [tasks,active]=await Promise.all([query.order('is_done').order('scheduled_date',{nullsFirst:true}).order('id').range(start,start+99),supabase.from('focus_sessions').select('id,started_at,schedule_id,focus_revision').eq('user_id',userId).is('ended_at',null).maybeSingle()]);
    if(tasks.error||active.error)throw new Error('Could not refresh. Your last view has been kept.');
    if(request!==requestNumber.current)return;
    setPlans(previous=>append?[...previous,...tasks.data as Plan[]]:tasks.data as Plan[]);setOffset(start+(tasks.data?.length??0));setMore(tasks.data?.length===100);setFocus(active.data);setMessage('');
@@ -93,7 +93,7 @@ function AppContent(){
  }
  async function stopFocus(){
   if(!focus||!userId)return;setMutation(true);
-  try{const ended=new Date(),seconds=Math.max(0,Math.floor((ended.getTime()-Date.parse(focus.started_at))/1000));const {data,error}=await supabase.from('focus_sessions').update({ended_at:ended.toISOString(),duration_sec:seconds}).eq('id',focus.id).eq('user_id',userId).is('ended_at',null).select('id');if(error||!data?.length)throw new Error('Could not stop this session. Refresh to check its current state.');await loadRef.current();}catch(error){Alert.alert('Focus',errorText(error));}finally{setMutation(false);}
+  try{const {data,error}=await supabase.rpc('transition_focus',{p_id:focus.id,p_revision:focus.focus_revision,p_action:'complete'});if(error||!data)throw new Error('Could not stop this session. Refresh to check its current state.');await loadRef.current();}catch(error){Alert.alert('Focus',errorText(error));}finally{setMutation(false);}
  }
  async function togglePush(){
   if(!userId)return;setPushBusy(true);
