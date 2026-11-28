@@ -10,6 +10,16 @@ body {
   @apply bg-slate-50 text-slate-900 antialiased;
 }
 
+.skip-link {
+  @apply fixed left-4 top-4 z-50 rounded border bg-white px-4 py-3 font-semibold text-slate-900 underline shadow-lg;
+  transform: translateY(calc(-100% - 1rem));
+}
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #020617; color: #e2e8f0; }
 html[data-theme="dark"] .bg-white { background-color: #0f172a; }

@@ -46,6 +46,15 @@ The Supabase browser session was still on its sign-in page during the
 authenticated application and hosted-schema acceptance above. Existing
 experimental switches retain their defaults in source.
 
+Keyboard navigation now has a first-focus “Skip to content” link that uses a
+native fragment target, including before hydration or with JavaScript disabled.
+The next Tab enters page content. Main navigation marks exact pages with
+`aria-current="page"` and nested locations with `aria-current="location"`;
+task detail routes belong to Inbox. Browser regressions cover signed-out and
+authenticated keyboard use, the no-JavaScript 390px bypass link, and Calendar
+and Settings subpages. This is a keyboard baseline, not a screen-reader or
+physical-device acceptance receipt.
+
 ## Contract and hosted evidence
 
 GitHub API access is available. Issue [#74](https://github.com/Geochelone666/focus-tracker-saas/issues/74)

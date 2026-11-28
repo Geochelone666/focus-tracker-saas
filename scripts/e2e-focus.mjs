@@ -183,6 +183,13 @@ try {
   let a=await first.newPage();const b=await second.newPage();
   const errors=[];for(const page of [a,b])page.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error at',page.url(),error.message);});
   await Promise.all([a.goto(base+'/dashboard'),b.goto(base+'/dashboard')]);
+  await a.keyboard.press('Tab');
+  assert.equal(await a.locator(':focus').textContent(),'Skip to content');
+  await a.keyboard.press('Enter');
+  assert.equal(await a.locator(':focus').getAttribute('id'),'main-content');
+  await a.keyboard.press('Tab');
+  assert.ok(await a.evaluate(()=>document.querySelector('#main-content').contains(document.activeElement)),
+    'Authenticated keyboard navigation must bypass header controls');
   await Promise.all([a.getByRole('button',{name:'Start Session',exact:true}).click(),b.getByRole('button',{name:'Start Session',exact:true}).click()]);
   await waitFor(async()=>(await rows()).length===1,'Two starts must create exactly one session');
   await backdateRunning(1);await a.reload();
@@ -377,6 +384,7 @@ try {
   const future=new Date(Date.now()+86400000*3).toISOString().slice(0,10);
   await a.setViewportSize({width:390,height:844});
   await a.goto(base+'/calendar/smart-plan');
+  assert.equal(await a.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Calendar',exact:true}).getAttribute('aria-current'),'location');
   assert.equal(await a.getByRole('button',{name:'Generate preview',exact:true}).isDisabled(),true);
   await a.getByRole('button',{name:'Save work hours',exact:true}).click();
   await a.getByText('Work hours saved across devices. Generate a new preview to use them.',{exact:true}).waitFor();
@@ -601,6 +609,7 @@ try {
   console.log('PASS: confirmed owner privacy control revokes AI keys and pauses device reminders at 390px');
   user.factors=[{id:fixtureFactor,factor_type:'totp',status:'verified',friendly_name:'Fixture authenticator',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}];
   await a.goto(base+'/settings/privacy/delete');
+  assert.equal(await a.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Settings',exact:true}).getAttribute('aria-current'),'location');
   const deleteForm=a.locator('form').filter({has:a.getByRole('button',{name:'Permanently delete my account',exact:true})});
   await deleteForm.getByLabel('Current password',{exact:true}).fill('wrong-fixture-password');
   await deleteForm.getByLabel('Authenticator code',{exact:true}).fill('000000');
