@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { pendingConfirmation, pendingUndo as readPendingUndo, type PendingUndo } from '@/lib/calendar-pending';
+import { validateId } from '@/lib/validation';
 import { schedulingReason } from '@/lib/smart-scheduler/reason-labels';
 import { SmartCalendarComparison } from './smart-calendar-comparison';
 import type { PlanEdit } from '@/lib/smart-scheduler/plan-comparison';
@@ -23,6 +25,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
   const hoursSaved=!!workHours&&workHours.start===start&&workHours.end===end;
   const [preview,setPreview]=useState<LivePreview|null>(null),[edits,setEdits]=useState<Record<string,Edit>>({});
   const [notice,setNotice]=useState(''),[pending,setPending]=useState<Pending|null>(null);
+  const [pendingUndo,setPendingUndo]=useState<PendingUndo|null>(null),[ready,setReady]=useState(false);
   const [receipt,setReceipt]=useState(latestReceipt),[undoKey,setUndoKey]=useState<string|null>(null);
   const [tasks,setTasks]=useState(initialTasks),[taskId,setTaskId]=useState(initialTasks[0]?.id??'');
   const [windowChanged,setWindowChanged]=useState(false);
@@ -49,11 +52,19 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
     }catch{setNotice('Could not update the lock. Reload to check its current state before retrying.');}
   });
   const key=`focus-calendar-request:${owner}`;
+  const undoStorageKey=`${key}:pending-undo`;
   useEffect(()=>{
-    try{const saved=JSON.parse(localStorage.getItem(key)??'null');if(saved?.draftId&&saved?.requestId){setPending(saved);setNotice('A previous confirmation may need checking. Retry it safely before generating another plan.');}}
+    try{
+      const saved=pendingConfirmation(localStorage.getItem(key));
+      const savedUndo=readPendingUndo(localStorage.getItem(undoStorageKey));
+      setPending(saved);setPendingUndo(savedUndo);
+      if(saved||savedUndo)setNotice('A previous calendar request may need checking. Retry it safely before generating another plan.');
+    }
     catch{/* Storage may be disabled. Database receipts remain authoritative. */}
-  },[key]);
+    finally{setReady(true);}
+  },[key,undoStorageKey]);
   const persist=(value:Pending|null)=>{setPending(value);try{if(value)localStorage.setItem(key,JSON.stringify(value));else localStorage.removeItem(key);}catch{/* Same-page retries still retain the request. */}};
+  const persistUndo=(value:PendingUndo|null)=>{setPendingUndo(value);try{if(value)localStorage.setItem(undoStorageKey,JSON.stringify(value));else localStorage.removeItem(undoStorageKey);}catch{/* Same-page retries still retain the request. */}};
   const generate=()=>startTransition(async()=>{
     setNotice('');
     try{
@@ -88,31 +99,37 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
     }catch{setNotice('The response was interrupted. Retry confirmation to check the same request safely.');}
   });
   const undo=()=>startTransition(async()=>{
-    if(!receipt)return;
-    let request=undoKey;
-    try{request=request??localStorage.getItem(`${key}:undo:${receipt}`);}catch{}
+    const target=pendingUndo?.receiptId??receipt;
+    if(!target)return;
+    let request=pendingUndo?.requestId??undoKey;
+    try{request=request??validateId(localStorage.getItem(`${key}:undo:${target}`));}catch{}
     request=request??crypto.randomUUID();setUndoKey(request);
-    try{localStorage.setItem(`${key}:undo:${receipt}`,request);}catch{}
+    persistUndo({receiptId:target,requestId:request});
+    try{localStorage.setItem(`${key}:undo:${target}`,request);}catch{}
     try{
-      const result=await undoCalendarSelection(receipt,request);
+      const result=await undoCalendarSelection(target,request);
       if('error' in result){setNotice(result.error);return;}
+      persistUndo(null);
+      try{localStorage.removeItem(`${key}:undo:${target}`);}catch{}
       setReceipt(null);setPreview(null);setEdits({});setUndoKey(null);setNotice('Plan undone. Previous task times have been restored.');router.refresh();
     }catch{setNotice('Undo response interrupted. Retry undo to check the same request safely.');}
   });
   const chosen=Object.values(edits).filter(e=>e.selected).length;
-  return <div className="space-y-6" aria-busy={busy}>
+  const blocked=busy||!ready||!!pending||!!pendingUndo;
+  return <div className="space-y-6" aria-busy={busy||!ready}>
     <form onSubmit={e=>{e.preventDefault();generate();}} className="flex flex-wrap items-end gap-3">
-      <label>First day<input className={`${input} block`} type="date" value={date} required disabled={busy||!!pending} onChange={e=>{setDate(e.target.value);changedWindow();}}/></label>
-      <label>Days<input className={`${input} block w-20`} type="number" min={1} max={14} value={days} required disabled={busy||!!pending} onChange={e=>{setDays(Number(e.target.value));changedWindow();}}/></label>
-      <label>Work starts<input className={`${input} block`} type="time" value={start} required disabled={busy||!!pending} onChange={e=>{setStart(e.target.value);changedWindow();}}/></label>
-      <label>Work ends<input className={`${input} block`} type="time" value={end} required disabled={busy||!!pending} onChange={e=>{setEnd(e.target.value);changedWindow();}}/></label>
-      <button type="button" className={input} disabled={busy||!!pending||hoursSaved} onClick={saveHours}>Save work hours</button>
-      <button className={input} disabled={busy||!!pending||!hoursSaved}>Generate preview</button>
+      <label>First day<input className={`${input} block`} type="date" value={date} required disabled={blocked} onChange={e=>{setDate(e.target.value);changedWindow();}}/></label>
+      <label>Days<input className={`${input} block w-20`} type="number" min={1} max={14} value={days} required disabled={blocked} onChange={e=>{setDays(Number(e.target.value));changedWindow();}}/></label>
+      <label>Work starts<input className={`${input} block`} type="time" value={start} required disabled={blocked} onChange={e=>{setStart(e.target.value);changedWindow();}}/></label>
+      <label>Work ends<input className={`${input} block`} type="time" value={end} required disabled={blocked} onChange={e=>{setEnd(e.target.value);changedWindow();}}/></label>
+      <button type="button" className={input} disabled={blocked||hoursSaved} onClick={saveHours}>Save work hours</button>
+      <button className={input} disabled={blocked||!hoursSaved}>Generate preview</button>
     </form>
     <p className="text-sm text-slate-600">Save work hours once to use them across devices. They apply to each selected day, including weekends. Changing saved hours invalidates older previews. Five-minute breaks are required. Missing estimates use a labelled 30-minute default. You can save up to 50 changes at once.</p>
     <p role="status" aria-live="polite">{busy?'Working…':notice}</p>
     {pending&&<div className="flex flex-wrap gap-3"><button className={input} disabled={busy} onClick={confirm}>Retry pending confirmation</button><button className={input} disabled={busy} onClick={()=>{persist(null);setPreview(null);setEdits({});setNotice('Pending request cleared locally. Check the calendar for saved changes before making a new plan.');router.refresh();}}>Check calendar and start over</button></div>}
-    {!!tasks.length&&<details className="rounded border p-4"><summary className="cursor-pointer font-medium">Protect a task from scheduling</summary><p className="my-3 text-sm text-slate-600">Lock a task to keep its current time, or keep an Inbox task unscheduled. Changing a lock clears the current preview. Unlocking a manually scheduled task does not make it movable automatically.</p><div className="flex flex-wrap items-end gap-3"><label className="min-w-0 flex-1">Task<select aria-label="Task to protect" className={`${input} block w-full`} value={taskId} disabled={busy||!!pending} onChange={e=>setTaskId(e.target.value)}>{tasks.map(task=><option key={task.id} value={task.id}>{task.title}{task.locked?' — Locked':''}</option>)}</select></label><button type="button" className={input} disabled={busy||!!pending||!selectedTask} onClick={changeLock}>{selectedTask?.locked?'Unlock task':'Lock task'}</button></div></details>}
+    {pendingUndo&&<div className="flex flex-wrap gap-3"><button className={input} disabled={busy||!ready||!!pending} onClick={undo}>Retry pending undo</button><button className={input} disabled={busy} onClick={()=>{persistUndo(null);setUndoKey(null);setReceipt(latestReceipt);setPreview(null);setEdits({});setNotice('Pending undo cleared locally. Check the calendar before making a new plan.');router.refresh();}}>Check calendar and clear pending undo</button></div>}
+    {!!tasks.length&&<details className="rounded border p-4"><summary className="cursor-pointer font-medium">Protect a task from scheduling</summary><p className="my-3 text-sm text-slate-600">Lock a task to keep its current time, or keep an Inbox task unscheduled. Changing a lock clears the current preview. Unlocking a manually scheduled task does not make it movable automatically.</p><div className="flex flex-wrap items-end gap-3"><label className="min-w-0 flex-1">Task<select aria-label="Task to protect" className={`${input} block w-full`} value={taskId} disabled={blocked} onChange={e=>setTaskId(e.target.value)}>{tasks.map(task=><option key={task.id} value={task.id}>{task.title}{task.locked?' — Locked':''}</option>)}</select></label><button type="button" className={input} disabled={blocked||!selectedTask} onClick={changeLock}>{selectedTask?.locked?'Unlock task':'Lock task'}</button></div></details>}
     {preview&&<>
       <SmartCalendarComparison preview={preview} edits={edits}/>
       <h2 className="text-lg font-semibold">Review changes · {chosen} selected</h2>
@@ -124,7 +141,7 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
           <p className="text-sm">Before: {task.date?`${task.date} ${task.time?.slice(0,5)??'Unscheduled time'}`:'Inbox'} → Suggested: {suggested.date} {suggested.time} ({(Date.parse(p.end_at)-Date.parse(p.start_at))/60000} min)</p>
           {edit&&<p className="text-sm font-medium">On confirmation: {edit.selected?`${edit.date} ${edit.time} (${edit.minutes} min)`:'Keep original time'}</p>}
           <p className="text-sm text-slate-600">{p.reason_codes.map(schedulingReason).join(' · ')}{p.estimate_source==='default'?' · Provisional estimate: 30 minutes':''}</p>
-          {edit?<fieldset disabled={busy||!!pending} className="flex flex-wrap items-end gap-3">
+          {edit?<fieldset disabled={blocked} className="flex flex-wrap items-end gap-3">
             <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={edit.selected} onChange={e=>modify({selected:e.target.checked})}/>Save change</label>
             <label className="text-sm">Date<input aria-label={`Date for ${task.title}`} className={`${input} block`} type="date" value={edit.date} onChange={e=>modify({date:e.target.value})}/></label>
             <label className="text-sm">Start ({zone})<input aria-label={`Start for ${task.title}`} className={`${input} block`} type="time" value={edit.time} onChange={e=>modify({time:e.target.value})}/></label>
@@ -135,8 +152,8 @@ export function SmartCalendarPlan({owner,today,zone,latestReceipt,initialTasks,i
       {preview.tasks.some(t=>t.time||t.locked)&&<details><summary>Fixed and locked tasks</summary><ul className="mt-3 space-y-2">{preview.tasks.filter(t=>(t.time||t.locked)&&!preview.output.placements.some(p=>p.schedule_id===t.id)).map(t=><li key={t.id}>{t.title} — {t.date??'No date'} {t.time?.slice(0,5)??''}{t.locked?' · Locked':''}</li>)}</ul></details>}
       {!!preview.output.unplaced.length&&<section><h2 className="font-semibold">Could not schedule</h2><ul>{preview.output.unplaced.map(p=><li key={p.schedule_id}>{preview.tasks.find(t=>t.id===p.schedule_id)?.title}: {schedulingReason(p.reason_code)}</li>)}</ul></section>}
       {!!preview.output.warnings.length&&<p role="alert">{preview.output.warnings.map(w=>schedulingReason(w.code)).join(' · ')}</p>}
-      <button className={`${input} bg-slate-900 text-white`} disabled={busy||!!pending||windowChanged||chosen<1||chosen>50} onClick={confirm}>Confirm {chosen} selected changes</button>
+      <button className={`${input} bg-slate-900 text-white`} disabled={blocked||windowChanged||chosen<1||chosen>50} onClick={confirm}>Confirm {chosen} selected changes</button>
     </>}
-    {receipt&&<button className={input} disabled={busy||!!pending} onClick={undo}>Undo latest saved plan</button>}
+    {receipt&&!pendingUndo&&<button className={input} disabled={blocked} onClick={undo}>Undo latest saved plan</button>}
   </div>;
 }

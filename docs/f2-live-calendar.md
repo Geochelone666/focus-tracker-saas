@@ -145,3 +145,26 @@ leaves the selected task untouched, creates no receipt and does not increment th
 plan revision. The full PostgreSQL concurrency/owner/rollback runner passed with
 this additional case. This does not clear the separate hosted identity and release
 gates documented in [the roadmap status](f2-roadmap-status.md).
+
+### Interrupted confirmation and undo
+
+Pending confirmation and undo identities survive reload in owner-keyed browser
+storage. The client restores and validates the bounded UUID pairs before
+enabling new planning controls. A pending undo keeps both its receipt and request
+ID, so it remains retryable even when the server already committed the undo and
+the latest-undoable receipt is now absent. Retrying checks the same server
+operation; it does not create a second undo or advance the plan revision twice.
+Successful verification removes the pending marker and legacy per-receipt key.
+
+While an operation needs checking, new planning and lock edits are disabled.
+The person can retry, or explicitly clear the local marker and check the calendar.
+Clearing a marker does not cancel or roll back server changes. Browser storage
+is not authoritative: GoTrue ownership, persisted receipts and SQL CAS still
+control all writes. Malformed/oversized saved values are ignored. If storage is
+blocked, same-page retry remains available; cross-reload recovery is unavailable.
+
+The fixture browser regression deliberately returns a failed response after the
+confirmation and undo have committed. It reloads and retries each original UUID
+pair, checks one confirmation receipt and verifies undo replay leaves the plan
+revision unchanged. This uses local fixture authentication and migrated SQL;
+hosted and independent acceptance remain separate release conditions.
