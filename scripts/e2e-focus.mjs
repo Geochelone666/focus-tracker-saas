@@ -40,6 +40,8 @@ const operations=[];
 let failAccountExport=false;
 let deletedFixtureOwner=false;
 let fixtureDeletionCalls=0;
+let loseCalendarReply=null;
+const calendarRequests=[];
 const server=createServer(async(req,res)=>{
   const began=Date.now(),path=new URL(req.url,"http://fixture").pathname;operations.push(`start ${req.method} ${path}`);
   res.on("finish",()=>operations.push(`done ${req.method} ${path}: ${res.statusCode} (${Date.now()-began}ms)`));
@@ -47,6 +49,8 @@ const server=createServer(async(req,res)=>{
     const url=new URL(req.url,`http://127.0.0.1:${fixturePort}`);
     let text='';for await(const part of req) text+=part;
     const body=text?JSON.parse(text):null;
+    if(['/rest/v1/rpc/confirm_calendar_draft','/rest/v1/rpc/undo_calendar_plan'].includes(url.pathname))
+      calendarRequests.push({operation:url.pathname.split('/').at(-1),...body});
     let output;
     if(url.pathname==='/auth/v1/otp') {
       assert.equal(body.email,user.email);
@@ -157,6 +161,11 @@ const server=createServer(async(req,res)=>{
           return req.headers.accept?.includes('vnd.pgrst.object')?(rows[0]??null):rows;
         } finally { await db.exec("reset role; select set_config('request.jwt.claim.sub','',false);"); }
       });
+    }
+    if(loseCalendarReply&&url.pathname===`/rest/v1/rpc/${loseCalendarReply}`){
+      loseCalendarReply=null;
+      res.writeHead(500,{'content-type':'application/json'});
+      res.end(JSON.stringify({code:'FIXTURE_LOST_RESPONSE',message:'Fixture response lost after commit'}));return;
     }
     res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(output));
   } catch(error) {res.writeHead(error.code==='23505'?409:error.code==='40001'?409:400,{'content-type':'application/json'});res.end(JSON.stringify({message:error.message,code:error.code||'FIXTURE'}));}
@@ -436,15 +445,36 @@ try {
 
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real preview controls overflow');
   await a.screenshot({path:'test-artifacts/f2-f02-live-calendar-mobile.png',fullPage:true});
+  loseCalendarReply='confirm_calendar_draft';
   await a.getByRole('button',{name:'Confirm 1 selected changes',exact:true}).click();
+  const retryMessage='Could not complete the request. Your selection is kept. Retry to check the same request safely.';
+  await a.getByText(retryMessage,{exact:true}).waitFor();
+  const interruptedConfirm=calendarRequests.at(-1);
+  assert.equal(interruptedConfirm.operation,'confirm_calendar_draft');
+  await a.reload();
+  assert.equal(await a.getByRole('button',{name:'Generate preview',exact:true}).isDisabled(),true,'Unresolved confirmation blocks a new plan');
+  await a.getByRole('button',{name:'Retry pending confirmation',exact:true}).click();
   await a.getByText('Plan saved. The calendar now shows the saved time blocks.',{exact:true}).waitFor();
+  assert.deepEqual(calendarRequests.at(-1),interruptedConfirm,'Reload must retry the exact confirmation request');
+  assert.equal((await serial(()=>db.query('select count(*)::integer as count from calendar_plan_receipts where request_id=$1',[interruptedConfirm.p_request]))).rows[0].count,1);
   const persisted=await serial(()=>db.query("select scheduled_date::text as day,scheduled_time::text as time,estimated_minutes as minutes from schedules where id=$1",[smartId]));
   assert.deepEqual(persisted.rows,[{day:future,time:'14:00:00',minutes:90}]);
   await a.reload();
   await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).waitFor();
   assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'Real Smart Calendar mobile overflow');
+  loseCalendarReply='undo_calendar_plan';
   await a.getByRole('button',{name:'Undo latest saved plan',exact:true}).click();
+  await a.getByText(retryMessage,{exact:true}).waitFor();
+  const interruptedUndo=calendarRequests.at(-1);
+  const undoneRevision=(await serial(()=>db.query('select revision::text from calendar_plan_state where user_id=$1',[owner]))).rows[0].revision;
+  await a.reload();
+  await a.getByRole('button',{name:'Retry pending undo',exact:true}).waitFor();
+  assert.equal(await a.getByRole('button',{name:'Generate preview',exact:true}).isDisabled(),true,'Unresolved undo blocks a new plan');
+  await a.getByRole('button',{name:'Retry pending undo',exact:true}).click();
   await a.getByText('Plan undone. Previous task times have been restored.',{exact:true}).waitFor();
+  assert.deepEqual(calendarRequests.at(-1),interruptedUndo,'Reload must retry the exact undo request');
+  assert.equal((await serial(()=>db.query('select revision::text from calendar_plan_state where user_id=$1',[owner]))).rows[0].revision,undoneRevision,'Undo replay must not advance the revision twice');
+  assert.equal(await a.evaluate(owner=>localStorage.getItem(`focus-calendar-request:${owner}:pending-undo`),owner),null,'Successful undo replay clears its pending marker');
   assert.deepEqual((await serial(()=>db.query('select scheduled_date,scheduled_time,estimated_minutes from schedules where id=$1',[smartId]))).rows,
     [{scheduled_date:null,scheduled_time:null,estimated_minutes:60}]);
   await a.getByLabel('First day').fill(future);
