@@ -4,7 +4,8 @@ const task:RecoveryTask={id:'a',title:'Work',updated_at:'2026-11-05T00:00Z',sche
 it('keeps unknown actual time distinct from zero and never infers completion',()=>{
  expect(recoveryStatus(task,'America/Toronto',Date.parse('2026-11-01T07:31Z')).kind).toBe('unfinished_block');
  expect(recoveryStatus({...task,actual_seconds:5400},'UTC',0).kind).toBe('over_estimate');
- expect(recoveryStatus({...task,active_status:'paused',actual_seconds:5400},'UTC',0).kind).toBe('active');
+ // Active status can describe either focus or a linked break.
+ expect(recoveryStatus({...task,active_status:'paused',actual_seconds:5400},'UTC',0)).toEqual({kind:'active',label:'Session is paused'});
 });
 it('uses the later repeated hour and elapsed duration across DST',()=>{
  expect(recoveryStatus(task,'America/Toronto',Date.parse('2026-11-01T06:45Z')).kind).toBe('open');

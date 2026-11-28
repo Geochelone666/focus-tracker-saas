@@ -507,7 +507,7 @@ try {
   await waitFor(async()=>(await rows()).some(s=>s.schedule_id===recoveryId&&s.ended_at===null),'Calendar focus must preserve task association');
   await a.getByRole('button',{name:'Pause focus',exact:true}).click();
   await a.goto(base+'/calendar/recovery');
-  await recoveryCard.getByText('Focus is paused',{exact:true}).waitFor();
+  await recoveryCard.getByText('Session is paused',{exact:true}).waitFor();
   await recoveryCard.getByRole('link',{name:'Return to active session',exact:true}).click();
   await a.getByRole('button',{name:'Resume focus',exact:true}).click();
   await a.getByRole('button',{name:'Finish focus',exact:true}).click();
