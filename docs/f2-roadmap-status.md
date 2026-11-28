@@ -20,14 +20,19 @@ trial, privacy, mobile and public-release work; it is separate from the source.
 
 `release/f2-candidate` assembles the verified application through
 [#98](https://github.com/Geochelone666/focus-tracker-saas/pull/98) for one review
-against `main`. The feature PRs retain their individual changes and test history.
+against `main`. The feature PRs retain their individual changes and test history. Follow-up
+PRs #100 and #101 are merged into this candidate: a read-only hosted
+identity/SELECT checker and accurate paused-session recovery feedback, with
+mixed focus/break regression coverage.
 
 The source application commit `9649759` passed GitHub `ci`, `e2e`, `mobile`
 and `postgres-calendar`, plus Vercel Preview. The fixture browser run covered
 390px onboarding, schedule confirmation and undo, recovery, export, privacy
 controls and email/TOTP deletion. It included one-time email code consumption
 and a simulated lost deletion response. The offline preflight validated all
-39 local filenames. The hosted migration registry has not been read.
+39 local filenames. Follow-up source `292ffbb` also passed all four GitHub
+checks and Vercel Preview. The two-session checker has only run against offline
+fixtures; the hosted migration registry has not been read.
 
 | Release condition | Current evidence | Next required result |
 | --- | --- | --- |
